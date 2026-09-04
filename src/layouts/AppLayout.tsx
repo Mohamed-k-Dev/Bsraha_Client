@@ -1,54 +1,79 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Outlet, NavLink, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
-import { Home, Mail, Search, Bell, Settings, LogOut, Menu, X, User as UserIcon } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { Avatar } from '@/components/Avatar';
-import { useAuth } from '@/context/AuthContext';
-import { mockApi } from '@/services/mockApi';
-import { cn } from '@/utils';
+import { useState, useEffect, useCallback } from "react";
+import {
+  Outlet,
+  NavLink,
+  Link,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Home,
+  Mail,
+  Search,
+  Bell,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+} from "lucide-react";
+import { useSelector, useDispatch } from "react-redux";
+
+import { Logo } from "@/components/Logo";
+import { Avatar } from "@/components/Avatar";
+import { RootState } from "@/store/store";
+import { logout as logoutAction } from "@/store/slices/authSlice";
+import { api } from "@/api/axios";
+import { cn } from "@/utils";
 
 const navItems = [
-  { to: '/dashboard', label: 'Home', icon: Home },
-  { to: '/messages', label: 'Messages', icon: Mail },
-  { to: '/search', label: 'Search', icon: Search },
-  { to: '/notifications', label: 'Notifications', icon: Bell },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: "/dashboard", label: "Home", icon: Home },
+  { to: "/messages", label: "Messages", icon: Mail },
+  { to: "/search", label: "Search", icon: Search },
+  { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppLayout() {
-  const { user, status, logout } = useAuth();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Pull authentication token from Redux store
+  const { accessToken } = useSelector((state: RootState) => state.auth);
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Fetch unread notifications count safely using Axios
   useEffect(() => {
-    mockApi.getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-  }, [location.pathname]);
+    if (!accessToken) return;
+    api
+      .get("/notification/unread-count")
+      .then((res) => setUnreadCount(res.data?.count || 0))
+      .catch(() => {});
+  }, [location.pathname, accessToken]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
   const handleLogout = useCallback(() => {
-    logout();
-    navigate('/');
-  }, [logout, navigate]);
+    dispatch(logoutAction()); // Clears token from Redux and localStorage
+    navigate("/login");
+  }, [dispatch, navigate]);
 
-  if (status === 'idle') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-paper-100">
-        <div className="animate-spin h-8 w-8 rounded-full border-2 border-ink-200 border-t-ember-500" />
-      </div>
-    );
+  // If no token, ProtectedRoute will handle redirecting, but this acts as an instant layout guard
+  if (!accessToken) {
+    return null;
   }
 
-  if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location }} />;
-  }
-
-  if (!user) return null;
+  // Placeholder user object since profile info will be fetched dynamically on individual pages
+  const user = {
+    displayName: "Account User",
+    username: "bsraha_user",
+    avatarSeed: "user",
+  };
 
   return (
     <div className="min-h-screen bg-paper-100">
@@ -65,15 +90,19 @@ export function AppLayout() {
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
-                  isActive ? 'bg-ink-900 text-paper-50' : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900'
+                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  isActive
+                    ? "bg-ink-900 text-paper-50"
+                    : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
                 )
               }
             >
               <item.icon className="h-5 w-5 shrink-0" />
               <span>{item.label}</span>
-              {item.label === 'Notifications' && unreadCount > 0 && (
-                <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">{unreadCount}</span>
+              {item.label === "Notifications" && unreadCount > 0 && (
+                <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">
+                  {unreadCount}
+                </span>
               )}
             </NavLink>
           ))}
@@ -86,8 +115,12 @@ export function AppLayout() {
           >
             <Avatar name={user.displayName} seed={user.avatarSeed} size="sm" />
             <div className="min-w-0">
-              <div className="text-sm font-medium text-ink-800 truncate">{user.displayName}</div>
-              <div className="text-xs text-ink-400 truncate">@{user.username}</div>
+              <div className="text-sm font-medium text-ink-800 truncate">
+                {user.displayName}
+              </div>
+              <div className="text-xs text-ink-400 truncate">
+                @{user.username}
+              </div>
             </div>
           </Link>
           <button
@@ -125,15 +158,19 @@ export function AppLayout() {
               className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ x: '100%' }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 400, damping: 35 }}
               className="absolute right-0 top-0 bottom-0 w-72 bg-paper-50 flex flex-col"
             >
               <div className="flex items-center justify-between p-5 border-b border-ink-100">
                 <Logo size="sm" to={null} />
-                <button onClick={() => setMobileOpen(false)} className="text-ink-500" aria-label="Close menu">
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="text-ink-500"
+                  aria-label="Close menu"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -145,26 +182,41 @@ export function AppLayout() {
                     to={item.to}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all',
-                        isActive ? 'bg-ink-900 text-paper-50' : 'text-ink-600 hover:bg-ink-100'
+                        "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all",
+                        isActive
+                          ? "bg-ink-900 text-paper-50"
+                          : "text-ink-600 hover:bg-ink-100"
                       )
                     }
                   >
                     <item.icon className="h-5 w-5 shrink-0" />
                     <span>{item.label}</span>
-                    {item.label === 'Notifications' && unreadCount > 0 && (
-                      <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">{unreadCount}</span>
+                    {item.label === "Notifications" && unreadCount > 0 && (
+                      <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">
+                        {unreadCount}
+                      </span>
                     )}
                   </NavLink>
                 ))}
               </nav>
 
               <div className="p-3 border-t border-ink-100 space-y-1">
-                <Link to="/profile" className="flex items-center gap-3 rounded-xl p-2 hover:bg-ink-100 transition-colors">
-                  <Avatar name={user.displayName} seed={user.avatarSeed} size="sm" />
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-3 rounded-xl p-2 hover:bg-ink-100 transition-colors"
+                >
+                  <Avatar
+                    name={user.displayName}
+                    seed={user.avatarSeed}
+                    size="sm"
+                  />
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink-800 truncate">{user.displayName}</div>
-                    <div className="text-xs text-ink-400 truncate">@{user.username}</div>
+                    <div className="text-sm font-medium text-ink-800 truncate">
+                      {user.displayName}
+                    </div>
+                    <div className="text-xs text-ink-400 truncate">
+                      @{user.username}
+                    </div>
                   </div>
                 </Link>
                 <button
@@ -188,14 +240,14 @@ export function AppLayout() {
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all',
-                  isActive ? 'text-ember-600' : 'text-ink-400'
+                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all relative",
+                  isActive ? "text-ember-600" : "text-ink-400"
                 )
               }
             >
               <item.icon className="h-5 w-5" />
               <span>{item.label}</span>
-              {item.label === 'Notifications' && unreadCount > 0 && (
+              {item.label === "Notifications" && unreadCount > 0 && (
                 <span className="absolute top-0 right-1/4 h-2 w-2 rounded-full bg-ember-500" />
               )}
             </NavLink>

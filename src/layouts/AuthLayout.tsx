@@ -4,11 +4,11 @@ import { Logo } from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
 
 export function AuthLayout() {
-  const { user, status } = useAuth();
+  // const { user, status } = useAuth();
 
-  if (status === 'authenticated' && user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  // if (status === 'authenticated' && user) {
+  //   return <Navigate to="/dashboard" replace />;
+  // }
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-paper-100">
