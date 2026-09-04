@@ -1,21 +1,22 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/context/AuthContext';
-import { PublicLayout } from '@/layouts/PublicLayout';
-import { AuthLayout } from '@/layouts/AuthLayout';
-import { AppLayout } from '@/layouts/AppLayout';
-import { LandingPage } from '@/pages/LandingPage';
-import { LoginPage } from '@/pages/LoginPage';
-import { SignupPage } from '@/pages/SignupPage';
-import { VerificationPage } from '@/pages/VerificationPage';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { MyMessagesPage } from '@/pages/MyMessagesPage';
-import { MessageDetailsPage } from '@/pages/MessageDetailsPage';
-import { ReplyThreadPage } from '@/pages/ReplyThreadPage';
-import { PublicProfilePage } from '@/pages/PublicProfilePage';
-import { SearchPage } from '@/pages/SearchPage';
-import { NotificationsPage } from '@/pages/NotificationsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { ProfilePage } from '@/pages/ProfilePage';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "@/context/AuthContext";
+import { PublicLayout } from "@/layouts/PublicLayout";
+import { AuthLayout } from "@/layouts/AuthLayout";
+import { AppLayout } from "@/layouts/AppLayout";
+import { LandingPage } from "@/pages/LandingPage";
+import { LoginPage } from "@/pages/LoginPage";
+import { SignupPage } from "@/pages/SignupPage";
+import { VerificationPage } from "@/pages/VerificationPage";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { MyMessagesPage } from "@/pages/MyMessagesPage";
+import { MessageDetailsPage } from "@/pages/MessageDetailsPage";
+import { ReplyThreadPage } from "@/pages/ReplyThreadPage";
+import { PublicProfilePage } from "@/pages/PublicProfilePage";
+import { SearchPage } from "@/pages/SearchPage";
+import { NotificationsPage } from "@/pages/NotificationsPage";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { ProfilePage } from "@/pages/ProfilePage";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -36,15 +37,20 @@ function App() {
           </Route>
 
           {/* Protected routes */}
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/messages" element={<MyMessagesPage />} />
-            <Route path="/messages/:id" element={<MessageDetailsPage />} />
-            <Route path="/messages/:messageId/replies/:replyId" element={<ReplyThreadPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/messages" element={<MyMessagesPage />} />
+              <Route path="/messages/:id" element={<MessageDetailsPage />} />
+              <Route
+                path="/messages/:messageId/replies/:replyId"
+                element={<ReplyThreadPage />}
+              />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+            </Route>{" "}
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
