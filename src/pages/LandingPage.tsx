@@ -486,7 +486,7 @@ export function MasonryUsersSection() {
 
         {/* Row 3: Scrambled data, going left, slower */}
         <MarqueeRow
-          items={[...MESSAGES.slice(3), ...MESSAGES.slice(0, 3)]}
+          items={[...MESSAGES?.slice(3), ...MESSAGES?.slice(0, 3)]}
           direction="left"
           speed={65}
         />

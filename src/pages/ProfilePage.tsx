@@ -1,112 +1,75 @@
-import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Settings, Share2, Mail, Eye, Calendar } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import { useAsync } from '@/hooks/useAsync';
-import { mockApi } from '@/services/mockApi';
-import { Avatar } from '@/components/Avatar';
-import { MessageCard } from '@/components/MessageCard';
-import { CopyButton, Badge } from '@/components/ui';
-import { MessageCardSkeleton } from '@/components/Skeleton';
-import { EmptyState } from '@/components/States';
-import { formatNumber, formatRelativeTime, totalReactions } from '@/utils';
-import type { Message, ReactionType } from '@/types';
-import { useState, useCallback } from 'react';
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Mail, ShieldCheck } from "lucide-react";
+
+import { Avatar } from "@/components/Avatar";
+import { MessageCard } from "@/components/MessageCard";
+import { EmptyState } from "@/components/States";
+import type { Message } from "@/types";
+import { getUserProfileByDisplayName } from "@/api/user.api";
+import { LoadingScreen } from "@/Ui/LoadingScreen";
+
 
 export function ProfilePage() {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { displayName } = useParams<{ displayName: string }>();
+  const { data, isLoading } = useQuery({
+    queryKey: ["public-profile", displayName],
+    queryFn: () => getUserProfileByDisplayName(displayName || ""),
+    enabled: !!displayName,
+  });
+  const profile = data?.profile;
+  const messages = data?.messages || [];
 
-  const { loading, error, refetch } = useAsync(async () => {
-    const msgs = await mockApi.getMyMessages('public');
-    setMessages(msgs);
-    return msgs;
-  }, []);
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
-  const handleReact = useCallback(async (messageId: string, type: ReactionType) => {
-    const result = await mockApi.reactToMessage(messageId, type);
-    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, reactions: result.reactions, myReaction: result.myReaction } : m)));
-  }, []);
-
-  if (!user) return null;
-
-  const totalRxs = messages.reduce((sum, m) => sum + totalReactions(m.reactions), 0);
-  const totalReplies = messages.reduce((sum, m) => sum + m.replyCount, 0);
+  if (!profile) {
+    return (
+      <EmptyState
+        icon={<ShieldCheck className="h-8 w-8" />}
+        title="User not found"
+        description="This profile does not exist."
+      />
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 sm:py-12">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card p-6 sm:p-8 mb-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-ember-100/50 blur-3xl" />
-        <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <Avatar name={user.displayName} seed={user.avatarSeed} size="2xl" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink-900">{user.displayName}</h1>
-              {user.verified && <Badge variant="moss"><Eye className="h-3 w-3" /> Verified</Badge>}
-            </div>
-            <p className="text-ink-400 font-mono text-sm">@{user.username}</p>
-            <p className="mt-3 text-ink-600 text-pretty max-w-lg">{user.bio}</p>
-            <div className="mt-4 flex items-center gap-5 text-sm">
-              <div><span className="font-display font-bold text-ink-900">{formatNumber(user.messagesCount)}</span> <span className="text-ink-400">messages</span></div>
-              <div><span className="font-display font-bold text-ink-900">{formatNumber(user.followersCount)}</span> <span className="text-ink-400">followers</span></div>
-              <div className="hidden sm:flex items-center gap-1 text-ink-400"><Calendar className="h-3.5 w-3.5" /> Joined {formatRelativeTime(user.joinedAt)}</div>
-            </div>
+    <div className="w-full lg:w-3/4 mx-auto px-5 sm:px-8 py-8 sm:py-12">
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-12 text-center sm:text-left">
+        <Avatar name={profile.displayName} seed={profile.userName} size="xl" />
+        <div>
+          <h1 className="font-display text-3xl font-bold text-ink-900">
+            {profile.displayName.split("@")[0]}
+          </h1>
+          <p className="text-ink-500 font-mono mt-1">@{profile.userName}</p>
+
+          <div className="mt-4">
+            <button className="bg-ember-500 hover:bg-ember-600 text-white font-medium py-2 px-6 rounded-xl transition-colors shadow-sm">
+              Send Anonymous Message
+            </button>
           </div>
         </div>
-
-        <div className="relative mt-6 flex items-center gap-3 flex-wrap">
-          <Link to="/settings" className="btn btn-outline text-sm px-4 py-2.5">
-            <Settings className="h-4 w-4" /> Edit profile
-          </Link>
-          <CopyButton text={`${window.location.origin}/u/${user.username}`} className="text-sm px-4 py-2.5">
-            <Share2 className="h-4 w-4" /> Share
-          </CopyButton>
-          <Link to={`/u/${user.username}`} className="text-sm text-ember-600 hover:text-ember-700 link-underline ml-auto">
-            View public profile →
-          </Link>
-        </div>
-      </motion.div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        <div className="card p-4 text-center">
-          <div className="font-display text-2xl font-bold text-ink-900 tabular-nums">{messages.length}</div>
-          <div className="text-xs text-ink-400 font-mono uppercase tracking-wider mt-0.5">Published</div>
-        </div>
-        <div className="card p-4 text-center">
-          <div className="font-display text-2xl font-bold text-ink-900 tabular-nums">{formatNumber(totalReplies)}</div>
-          <div className="text-xs text-ink-400 font-mono uppercase tracking-wider mt-0.5">Replies</div>
-        </div>
-        <div className="card p-4 text-center">
-          <div className="font-display text-2xl font-bold text-ink-900 tabular-nums">{formatNumber(totalRxs)}</div>
-          <div className="text-xs text-ink-400 font-mono uppercase tracking-wider mt-0.5">Reactions</div>
-        </div>
       </div>
 
-      {/* Published messages */}
-      <div className="mb-4 flex items-center gap-2">
-        <h2 className="font-display text-xl font-semibold text-ink-800">Your public stories</h2>
-        <span className="chip bg-ink-100 text-ink-500 font-mono">{messages.length}</span>
+      <div className="mb-6 border-b border-ink-100 pb-2">
+        <h2 className="font-display text-xl font-semibold text-ink-800">
+          Public Responses
+        </h2>
       </div>
 
-      {loading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => <MessageCardSkeleton key={i} />)}
-        </div>
-      ) : error ? (
-        <EmptyState icon={<Mail className="h-8 w-8" />} title="Could not load" description={error} action={<button onClick={refetch} className="btn btn-outline">Try again</button>} />
-      ) : messages.length === 0 ? (
+      {messages.length === 0 ? (
         <EmptyState
-          icon={<Eye className="h-8 w-8" />}
-          title="Nothing published yet"
-          description="Open a message you received and tap the eye icon to publish it. Published messages appear here and on your public profile."
-          action={<Link to="/messages" className="btn btn-ember">Go to messages</Link>}
+          icon={<Mail className="h-8 w-8" />}
+          title="No public messages"
+          description={`${
+            profile.displayName.split("@")[0]
+          } hasn't published any messages yet.`}
         />
       ) : (
-        <div className="space-y-4">
-          {messages.map((m) => (
-            <MessageCard key={m.id} message={m} onReact={(t) => handleReact(m.id, t)} linkable />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {messages.map((m: Message) => (
+            <MessageCard key={m._id} message={m} showActions={false} />
           ))}
         </div>
       )}

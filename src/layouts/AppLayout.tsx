@@ -7,23 +7,16 @@ import {
   useLocation,
 } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Home,
-  Mail,
-  Search,
-  Bell,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
+import { Home, Mail, Search, Bell, Settings, LogOut, X } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
+import { useQuery } from "@tanstack/react-query";
 
 import { Logo } from "@/components/Logo";
 import { Avatar } from "@/components/Avatar";
 import { RootState } from "@/store/store";
 import { logout as logoutAction } from "@/store/slices/authSlice";
 import { api } from "@/api/axios";
+import { getUserProfile } from "@/api/user.api";
 import { cn } from "@/utils";
 
 const navItems = [
@@ -34,63 +27,130 @@ const navItems = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
+// Define the context type so pages know what they are receiving
+export type LayoutContextType = {
+  setMobileOpen: (open: boolean) => void;
+};
+
 export function AppLayout() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Pull authentication token from Redux store
   const { accessToken } = useSelector((state: RootState) => state.auth);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch unread notifications count safely using Axios
-  useEffect(() => {
-    if (!accessToken) return;
-    api
-      .get("/notification/unread-count")
-      .then((res) => setUnreadCount(res.data?.count || 0))
-      .catch(() => {});
-  }, [location.pathname, accessToken]);
+  const { data: user } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: getUserProfile,
+    enabled: !!accessToken,
+  });
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
 
   const handleLogout = useCallback(() => {
-    dispatch(logoutAction()); // Clears token from Redux and localStorage
+    dispatch(logoutAction());
     navigate("/login");
   }, [dispatch, navigate]);
 
-  // If no token, ProtectedRoute will handle redirecting, but this acts as an instant layout guard
-  if (!accessToken) {
-    return null;
-  }
-
-  // Placeholder user object since profile info will be fetched dynamically on individual pages
-  const user = {
-    displayName: "Account User",
-    username: "bsraha_user",
-    avatarSeed: "user",
-  };
+  if (!accessToken) return null;
 
   return (
-    <div className="min-h-screen bg-paper-100">
-      {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 hidden md:flex w-64 flex-col border-r border-ink-100 bg-paper-50/80 backdrop-blur z-30">
-        <div className="p-5">
-          <Logo size="md" to="/dashboard" />
-        </div>
+    <div className="flex min-h-screen bg-paper-100">
+      {/* ========================================= */}
+      {/* MOBILE DRAWER MODAL (Animated Slide-in)   */}
+      {/* ========================================= */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <div className="md:hidden fixed inset-0 z-50">
+            {/* Dark background with heavy Blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileOpen(false)}
+              className="absolute inset-0 bg-ink-900/50 backdrop-blur-md"
+            />
+            {/* Sidebar Slide-in Content */}
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="absolute left-0 top-0 bottom-0 w-[280px] bg-paper-50 shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between p-5 border-b border-ink-100">
+                <Logo size="sm" to="/dashboard" />
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="p-2 bg-ink-100 rounded-xl text-ink-600 hover:bg-ink-200 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-        <nav className="flex-1 px-3 space-y-1">
+              <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-4 rounded-xl px-4 py-3 text-[15px] font-medium transition-all",
+                        isActive
+                          ? "bg-ink-900 text-paper-50"
+                          : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+                      )
+                    }
+                  >
+                    <item.icon className="h-5 w-5 shrink-0" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+
+              <div className="p-4 border-t border-ink-100 bg-paper-100">
+                <div className="flex items-center gap-3 rounded-xl p-3">
+                  <Avatar
+                    name={user?.displayName || "User"}
+                    seed={user?.userName || "anon"}
+                    size="md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-ink-800 truncate">
+                        {user?.displayName || "Loading..."}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[15px] font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                >
+                  <LogOut className="h-5 w-5" /> Log out
+                </button>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================= */}
+      {/* DESKTOP SIDEBAR (Hidden on mobile) */}
+      {/* ========================================= */}
+      <aside className="fixed left-0 top-0 bottom-0 hidden md:flex md:w-64 lg:w-80 flex-col border-r border-ink-100 bg-paper-50/80 backdrop-blur z-30">
+        <div className="p-6">
+          <Logo size="lg" to="/dashboard" />
+        </div>
+        <nav className="flex-1 px-4 space-y-1.5 mt-2 overflow-y-auto">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "flex items-center gap-4 rounded-xl px-4 py-3 text-[15px] font-medium transition-all",
                   isActive
                     ? "bg-ink-900 text-paper-50"
                     : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
@@ -99,165 +159,43 @@ export function AppLayout() {
             >
               <item.icon className="h-5 w-5 shrink-0" />
               <span>{item.label}</span>
-              {item.label === "Notifications" && unreadCount > 0 && (
-                <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">
-                  {unreadCount}
-                </span>
-              )}
             </NavLink>
           ))}
         </nav>
-
-        <div className="p-3 border-t border-ink-100">
+        <div className="p-4 border-t border-ink-100">
           <Link
             to="/profile"
-            className="flex items-center gap-3 rounded-xl p-2 hover:bg-ink-100 transition-colors"
+            className="flex items-center gap-3 rounded-xl p-3 hover:bg-ink-100 transition-colors"
           >
-            <Avatar name={user.displayName} seed={user.avatarSeed} size="sm" />
+            <Avatar
+              name={user?.displayName || "User"}
+              seed={user?.userName || "anon"}
+              size="md"
+            />
             <div className="min-w-0">
-              <div className="text-sm font-medium text-ink-800 truncate">
-                {user.displayName}
+              <div className="text-sm font-bold text-ink-800 truncate">
+                {user?.displayName || "Loading..."}
               </div>
-              <div className="text-xs text-ink-400 truncate">
-                @{user.username}
+              <div className="text-sm text-ink-400 truncate">
+                @{user?.userName || "user"}
               </div>
             </div>
           </Link>
           <button
             onClick={handleLogout}
-            className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-500 hover:bg-ink-100 hover:text-ink-900 transition-all"
+            className="mt-2 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-[15px] font-medium text-ink-500 hover:bg-red-50 hover:text-red-600 transition-all"
           >
             <LogOut className="h-5 w-5" /> Log out
           </button>
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="md:hidden sticky top-0 z-30 glass border-b border-ink-100">
-        <div className="flex items-center justify-between px-4 py-3">
-          <Logo size="sm" to="/dashboard" />
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="p-2 -mr-2 text-ink-700 hover:text-ink-900"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile drawer */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 400, damping: 35 }}
-              className="absolute right-0 top-0 bottom-0 w-72 bg-paper-50 flex flex-col"
-            >
-              <div className="flex items-center justify-between p-5 border-b border-ink-100">
-                <Logo size="sm" to={null} />
-                <button
-                  onClick={() => setMobileOpen(false)}
-                  className="text-ink-500"
-                  aria-label="Close menu"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <nav className="flex-1 p-3 space-y-1">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all",
-                        isActive
-                          ? "bg-ink-900 text-paper-50"
-                          : "text-ink-600 hover:bg-ink-100"
-                      )
-                    }
-                  >
-                    <item.icon className="h-5 w-5 shrink-0" />
-                    <span>{item.label}</span>
-                    {item.label === "Notifications" && unreadCount > 0 && (
-                      <span className="ml-auto chip bg-ember-500 text-white text-[10px] px-2 py-0.5">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </NavLink>
-                ))}
-              </nav>
-
-              <div className="p-3 border-t border-ink-100 space-y-1">
-                <Link
-                  to="/profile"
-                  className="flex items-center gap-3 rounded-xl p-2 hover:bg-ink-100 transition-colors"
-                >
-                  <Avatar
-                    name={user.displayName}
-                    seed={user.avatarSeed}
-                    size="sm"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink-800 truncate">
-                      {user.displayName}
-                    </div>
-                    <div className="text-xs text-ink-400 truncate">
-                      @{user.username}
-                    </div>
-                  </div>
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-ink-500 hover:bg-ink-100 transition-all"
-                >
-                  <LogOut className="h-5 w-5" /> Log out
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Bottom nav for mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass border-t border-ink-100">
-        <div className="flex items-center justify-around px-2 py-1.5">
-          {navItems.slice(0, 5).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all relative",
-                  isActive ? "text-ember-600" : "text-ink-400"
-                )
-              }
-            >
-              <item.icon className="h-5 w-5" />
-              <span>{item.label}</span>
-              {item.label === "Notifications" && unreadCount > 0 && (
-                <span className="absolute top-0 right-1/4 h-2 w-2 rounded-full bg-ember-500" />
-              )}
-            </NavLink>
-          ))}
-        </div>
-      </nav>
-
-      {/* Main content */}
-      <main className="md:ml-64 pb-16 md:pb-0 min-h-screen">
-        <Outlet />
+      {/* ========================================= */}
+      {/* MAIN CONTENT AREA */}
+      {/* ========================================= */}
+      <main className="flex-1 flex flex-col min-h-screen md:ml-64 lg:ml-80">
+        {/* We pass setMobileOpen down to the children (like DashboardPage) */}
+        <Outlet context={{ setMobileOpen } satisfies LayoutContextType} />
       </main>
     </div>
   );
