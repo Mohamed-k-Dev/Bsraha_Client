@@ -129,13 +129,6 @@ export function SearchPage() {
           )}
         </>
       )}
-
-      {/* Future search hint */}
-      {!loading && !error && results.length > 0 && (
-        <p className="mt-8 text-center text-xs text-ink-300 font-mono">
-          Designed for autocomplete, fuzzy search, and typo tolerance
-        </p>
-      )}
     </div>
   );
 }

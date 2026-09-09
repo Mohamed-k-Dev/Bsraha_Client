@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { getMyMessages, getUserStats } from "@/api/messages.api";
+import { getMessages, getUserStats } from "@/api/messages.api";
 import { getUserProfile } from "@/api/user.api";
 import { reactToTarget, removeReaction } from "@/api/reactions.api";
 import { MessageCard } from "@/components/MessageCard";
@@ -64,14 +64,16 @@ export function DashboardPage() {
   });
 
   const {
-    data: messages = [],
+    data,
     isLoading: messagesLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["my-messages"],
-    queryFn: getMyMessages,
+    queryKey: ["my-messages", "dashboard"],
+    queryFn: () => getMessages({ limit: 6 }),
   });
+
+  const messages = data?.messages || [];
 
   const reactionMutation = useMutation({
     mutationFn: async ({
@@ -232,7 +234,7 @@ export function DashboardPage() {
     [messages, reactionMutation]
   );
 
-  const recentMessages = messages.slice(0, 4);
+  const recentMessages = messages;
   const rawName = user?.displayName || user?.userName || "";
   const displayName = rawName.split("@")[0].trim();
   const nameChars = useMemo(() => displayName.split(""), [displayName]);
