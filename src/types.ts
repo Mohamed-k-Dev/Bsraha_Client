@@ -3,9 +3,9 @@ export type ID = string;
 export type ReactionType = 'heart' | 'laugh' | 'fire' | 'sad' | 'angry' | 'wow';
 
 export interface User {
-  id: ID;
+  _id: ID;
   displayName: string;
-  username: string;
+  userName: string;
   bio: string;
   avatarSeed: string;
   joinedAt: string;
