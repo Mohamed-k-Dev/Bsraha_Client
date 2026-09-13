@@ -1,128 +1,209 @@
-import { useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Mail, Eye, Share2, Calendar } from 'lucide-react';
-import { useAsync } from '@/hooks/useAsync';
-import { mockApi } from '@/services/mockApi';
-import { Avatar } from '@/components/Avatar';
-import { MessageCard } from '@/components/MessageCard';
-import { ComposeMessage } from '@/components/ComposeMessage';
-import { MessageCardSkeleton } from '@/components/Skeleton';
-import { EmptyState, ErrorState } from '@/components/States';
-import { CopyButton, Badge } from '@/components/ui';
-import type { User, Message, ReactionType } from '@/types';
-import { formatNumber, formatRelativeTime } from '@/utils';
+import { motion } from "motion/react";
+import { 
+  Mail, 
+  Phone, 
+  User as UserIcon, 
+  Calendar, 
+  MapPin, 
+  MessageSquare,
+  Image as ImageIcon
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
-export function PublicProfilePage() {
-  const { username } = useParams<{ username: string }>();
-  const [user, setUser] = useState<User | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [showCompose, setShowCompose] = useState(false);
+import { Avatar } from "@/components/Avatar";
+import { MessageCard } from "@/components/MessageCard";
+import { Spinner } from "@/components/ui";
+import { EmptyState, ErrorState } from "@/components/States";
+import { getMessages } from "@/api/messages.api"; 
+// import { useAuth } from "@/hooks/useAuth"; // Adjust to how you get the logged-in user!
+import { cn } from "@/utils";
 
-  const { loading, error, refetch } = useAsync(async () => {
-    const [u, msgs] = await Promise.all([
-      mockApi.getUserByUsername(username!),
-      mockApi.getUserPublishedMessages(''),
-    ]);
-    if (u) {
-      const published = await mockApi.getUserPublishedMessages(u.id);
-      setMessages(published);
-    }
-    setUser(u);
-    return { u, msgs };
-  }, [username]);
+export function ProfilePage() {
+  // Replace this mock with your actual auth hook or user fetch query
+  // const { user } = useAuth(); 
+  const user = {
+    _id: "u_123",
+    displayName: "Sara Al-Mansoor",
+    userName: "sara.design",
+    email: "sara.design@example.com",
+    phone: "+20 100 123 4567",
+    gender: "Female",
+    age: 26,
+    bio: "Product Designer & Frontend Engineer. Obsessed with micro-interactions, neo-brutalist layouts, and making the web feel alive. 🎨✨",
+    image: null,
+    coverImages: [], // Add an image URL here to see the cover image
+  };
 
-  const handleReact = useCallback(async (messageId: string, type: ReactionType) => {
-    const result = await mockApi.reactToMessage(messageId, type);
-    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, reactions: result.reactions, myReaction: result.myReaction } : m)));
-  }, []);
+  // Fetch the user's published messages (adjust query params based on your backend)
+  const {
+    data: messagesData,
+    isLoading: messagesLoading,
+    error: messagesError,
+    refetch,
+  } = useQuery({
+    queryKey: ["my-published-messages"],
+    queryFn: () => getMessages({ filter: "published", limit: 20 }), 
+  });
 
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 sm:py-12">
-        <div className="flex items-center gap-4 mb-8">
-          <div className="h-20 w-20 rounded-full shimmer-bg" />
-          <div className="space-y-2">
-            <div className="h-6 w-40 shimmer-bg rounded" />
-            <div className="h-4 w-24 shimmer-bg rounded" />
-          </div>
-        </div>
-        <div className="space-y-4">
-          {Array.from({ length: 2 }).map((_, i) => <MessageCardSkeleton key={i} />)}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) return <div className="max-w-3xl mx-auto px-5 py-12"><ErrorState message={error} onRetry={refetch} /></div>;
-
-  if (!user) {
-    return (
-      <div className="max-w-3xl mx-auto px-5 py-12">
-        <EmptyState icon={<Mail className="h-8 w-8" />} title="Profile not found" description={`No one with the username @${username} exists on Bsraha.`} />
-      </div>
-    );
-  }
+  const publishedMessages = messagesData?.messages || [];
+  const coverImage = user?.coverImages?.[0];
 
   return (
-    <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 sm:py-12">
-      {/* Profile header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card p-6 sm:p-8 mb-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-ember-100/50 blur-3xl" />
-        <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <Avatar name={user.displayName} seed={user.avatarSeed} size="2xl" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-display text-2xl sm:text-3xl font-semibold text-ink-900">{user.displayName}</h1>
-              {user.verified && <Badge variant="moss"><Eye className="h-3 w-3" /> Verified</Badge>}
+    <div className="min-h-screen bg-paper-50 pb-20">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* --- 1. COVER IMAGE --- */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative w-full h-48 sm:h-72 lg:h-80 mt-4 sm:mt-8 rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm bg-ink-900 border border-ink-100"
+        >
+          {coverImage ? (
+            <img 
+              src={coverImage} 
+              alt="Cover" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-[linear-gradient(135deg,#1f1a13,#4b3f2f)] opacity-90 flex items-center justify-center">
+              <ImageIcon className="h-12 w-12 text-ink-700/50" />
             </div>
-            <p className="text-ink-400 font-mono text-sm">@{user.username}</p>
-            <p className="mt-3 text-ink-600 text-pretty max-w-lg">{user.bio}</p>
-            <div className="mt-4 flex items-center gap-5 text-sm">
-              <div><span className="font-display font-bold text-ink-900">{formatNumber(user.messagesCount)}</span> <span className="text-ink-400">messages</span></div>
-              <div><span className="font-display font-bold text-ink-900">{formatNumber(user.followersCount)}</span> <span className="text-ink-400">followers</span></div>
-              <div className="hidden sm:flex items-center gap-1 text-ink-400"><Calendar className="h-3.5 w-3.5" /> Joined {formatRelativeTime(user.joinedAt)}</div>
+          )}
+          {/* Subtle gradient overlay to make header pop */}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-900/40 to-transparent" />
+        </motion.div>
+
+        {/* --- 2. CENTERED AVATAR --- */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1, type: "spring", stiffness: 300, damping: 25 }}
+          className="flex justify-center -mt-16 sm:-mt-20 relative z-10"
+        >
+          <div className="p-1.5 bg-paper-50 rounded-full shadow-sm">
+            {/* Using your custom Avatar component */}
+            <Avatar 
+              name={user.displayName} 
+              seed={user.userName} 
+              size="2xl" 
+              className="h-28 w-28 sm:h-36 sm:w-36 text-4xl shadow-inner border border-ink-100"
+            />
+          </div>
+        </motion.div>
+
+        {/* --- 3. PROFILE DETAILS (Bio & Names) --- */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-center mt-4 sm:mt-6 px-4"
+        >
+          <h1 className="font-display text-2xl sm:text-4xl font-bold text-ink-900 tracking-tight">
+            {user.displayName}
+          </h1>
+          <p className="text-ink-400 font-mono text-sm sm:text-base mt-1">
+            @{user.userName}
+          </p>
+
+          <p className="max-w-2xl mx-auto mt-5 text-ink-800 text-sm sm:text-[15px] leading-relaxed text-pretty">
+            {user.bio || "This user hasn't written a bio yet, but they seem pretty cool."}
+          </p>
+        </motion.div>
+
+        {/* --- 4. INFO PILLS (Email, Phone, Gender, Age) --- */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-wrap items-center justify-center gap-3 mt-8 max-w-3xl mx-auto"
+        >
+          {user.email && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
+              <Mail className="h-4 w-4 text-ink-400" />
+              {user.email}
+            </div>
+          )}
+          {user.phone && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
+              <Phone className="h-4 w-4 text-ink-400" />
+              {user.phone}
+            </div>
+          )}
+          {user.gender && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
+              <UserIcon className="h-4 w-4 text-ink-400" />
+              {user.gender}
+            </div>
+          )}
+          {user.age && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
+              <Calendar className="h-4 w-4 text-ink-400" />
+              {user.age} years old
+            </div>
+          )}
+        </motion.div>
+
+        {/* --- 5. PUBLISHED MESSAGES SECTION --- */}
+        <div className="mt-16 sm:mt-20">
+          <div className="flex items-center gap-3 mb-8 px-2">
+            <div className="h-10 w-10 rounded-xl bg-ember-100 flex items-center justify-center text-ember-600 border border-ember-200">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-900">
+                Published Messages
+              </h2>
+              <p className="text-sm text-ink-400 font-mono mt-0.5">
+                {publishedMessages.length} {publishedMessages.length === 1 ? 'entry' : 'entries'} available publicly
+              </p>
             </div>
           </div>
+
+          {messagesLoading ? (
+            <div className="flex justify-center py-20">
+              <Spinner size="lg" className="text-ember-500" />
+            </div>
+          ) : messagesError ? (
+            <ErrorState
+              message="Failed to load your published messages."
+              onRetry={refetch}
+            />
+          ) : publishedMessages.length === 0 ? (
+            <EmptyState
+              icon={<EyeOff className="h-8 w-8" />}
+              title="No Public Messages"
+              description="You haven't published any messages to your profile yet."
+              action={
+                <Link to="/messages" className="btn bg-ink-900 text-white hover:bg-ink-800 rounded-xl px-6 py-2.5 shadow-sm text-sm font-medium transition-colors">
+                  Go to Inbox
+                </Link>
+              }
+              className="py-16 bg-white border border-ink-100 rounded-3xl shadow-sm"
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {publishedMessages.map((msg: any, idx: number) => (
+                <motion.div
+                  key={msg._id || msg.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 * (idx % 10) }}
+                >
+                  <MessageCard
+                    message={msg}
+                    onReact={() => {}} // Hook up your react logic here
+                    onTogglePublish={() => {}} // Hook up your toggle publish logic here
+                    linkable={true}
+                    showActions={true}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Actions */}
-        <div className="relative mt-6 flex items-center gap-3 flex-wrap">
-          <button onClick={() => setShowCompose((v) => !v)} className="btn btn-ember text-sm px-5 py-2.5">
-            <Mail className="h-4 w-4" /> Send message
-          </button>
-          <CopyButton text={`${window.location.origin}/u/${user.username}`} className="text-sm px-4 py-2.5">
-            <Share2 className="h-4 w-4" /> Share profile
-          </CopyButton>
-        </div>
-      </motion.div>
-
-      {/* Compose */}
-      {showCompose && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6 overflow-hidden">
-          <ComposeMessage receiverId={user.id} receiverName={user.displayName} onSent={() => setShowCompose(false)} />
-        </motion.div>
-      )}
-
-      {/* Published messages */}
-      <div className="mb-4 flex items-center gap-2">
-        <h2 className="font-display text-xl font-semibold text-ink-800">Public stories</h2>
-        <span className="chip bg-ink-100 text-ink-500 font-mono">{messages.length}</span>
       </div>
-
-      {messages.length === 0 ? (
-        <EmptyState
-          icon={<Eye className="h-8 w-8" />}
-          title="No public stories yet"
-          description={`${user.displayName} has not published any messages yet.`}
-        />
-      ) : (
-        <div className="space-y-4">
-          {messages.map((m) => (
-            <MessageCard key={m.id} message={m} onReact={(t) => handleReact(m.id, t)} linkable showActions={false} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
