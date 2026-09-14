@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Trash2,
@@ -8,6 +8,9 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
+
 import type { Reply as ReplyType, ReactionType } from "@/types";
 import { getReplyReplies } from "@/api/messages.api";
 import { Avatar } from "./Avatar";
@@ -24,7 +27,8 @@ interface ReplyCardProps {
     type: ReactionType,
     currentReaction: string | null
   ) => void;
-  onReply: (parentId: string) => void;
+  // FIX: Pass content back to parent
+  onReply: (parentId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
   onToggleVisibility?: (replyId: string) => void;
   isMessageOwner: boolean;
@@ -42,12 +46,53 @@ export function ReplyCard({
 }: ReplyCardProps) {
   const [expanded, setExpanded] = useState(false);
 
+  const [optMyReaction, setOptMyReaction] = useState<string | null>(
+    reply.myReaction || null
+  );
+  const [optReactions, setOptReactions] = useState<any[]>(
+    reply.reactions || []
+  );
+
+  useEffect(() => {
+    setOptMyReaction(reply.myReaction || null);
+    setOptReactions(reply.reactions || []);
+  }, [reply.myReaction, reply.reactions]);
+
+  const handleOptimisticReact = (type: string) => {
+    const prevReaction = optMyReaction;
+    const isRemoving = prevReaction === type;
+    const newReaction = isRemoving ? null : type;
+
+    setOptMyReaction(newReaction);
+
+    let updatedReactions = [...optReactions];
+    if (prevReaction) {
+      const prevIdx = updatedReactions.findIndex(
+        (r) => r.type === prevReaction
+      );
+      if (prevIdx > -1)
+        updatedReactions[prevIdx].count = Math.max(
+          0,
+          updatedReactions[prevIdx].count - 1
+        );
+    }
+    if (newReaction) {
+      const newIdx = updatedReactions.findIndex((r) => r.type === newReaction);
+      if (newIdx > -1) updatedReactions[newIdx].count += 1;
+      else updatedReactions.push({ type: newReaction, count: 1 });
+    }
+    setOptReactions(updatedReactions.filter((r) => r.count > 0));
+
+    onReact(reply.id || reply._id, type, prevReaction);
+  };
+
   const replyId = reply.id || reply._id;
   const bodyText = reply.body || reply.content;
   const authorName = reply.isAnonymous
     ? "Anonymous"
     : reply.authorDisplayName || reply.sender?.displayName || "User";
   const avatarSeed = reply.sender?.userName || reply.authorAvatarSeed || "seed";
+  const authorUsername = reply.sender?.userName;
 
   const isMine =
     reply.isMine ||
@@ -62,12 +107,10 @@ export function ReplyCard({
   });
 
   const children = subRepliesData?.replies || reply.children || [];
-
   const fetchedTotal = subRepliesData?.pagination?.total;
   const replyCount =
     fetchedTotal ?? reply.replyCount ?? reply.repliesCount ?? children.length;
 
-  // Smart Toggle: Show if count > 0, OR if the backend didn't give us a count yet, OR if it's currently expanded
   const hasExplicitCount =
     reply.replyCount !== undefined ||
     reply.repliesCount !== undefined ||
@@ -96,7 +139,6 @@ export function ReplyCard({
           animate={{ opacity: 1, y: 0 }}
           className="group relative"
         >
-          {/* Author Header */}
           <div className="flex items-center gap-2.5 mb-2">
             <Avatar
               name={authorName}
@@ -105,9 +147,24 @@ export function ReplyCard({
               anonymous={reply.isAnonymous}
             />
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-display font-semibold text-ink-900 text-sm truncate">
-                {authorName}
-              </span>
+              {reply.isAnonymous ? (
+                <button
+                  onClick={() =>
+                    toast.info("This user is anonymous, profile is hidden.")
+                  }
+                  className="font-display font-semibold text-ink-900 text-sm truncate cursor-help text-left"
+                >
+                  {authorName}
+                </button>
+              ) : (
+                <Link
+                  to={`/u/${authorUsername}`}
+                  className="font-display font-semibold text-ink-900 text-sm truncate hover:text-ember-600 transition-colors"
+                >
+                  {authorName}
+                </Link>
+              )}
+
               {isMine && (
                 <Badge
                   variant="ember"
@@ -117,12 +174,13 @@ export function ReplyCard({
                 </Badge>
               )}
               <span className="text-xs text-ink-400 font-mono">
-                {formatRelativeTime(reply.createdAt)}
+                {formatRelativeTime(
+                  reply.createdAt ? new Date(reply.createdAt) : new Date()
+                )}
               </span>
             </div>
           </div>
 
-          {/* Body */}
           {reply.isDeleted ? (
             <p className="text-ink-400 italic text-sm py-1">
               This reply was deleted.
@@ -148,13 +206,12 @@ export function ReplyCard({
             </p>
           )}
 
-          {/* Actions Footer */}
           {!reply.isDeleted && !reply.isHidden && (
             <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
               <ReactionBar
-                reactions={reply.reactions || []}
-                myReaction={reply.myReaction}
-                onReact={(t) => onReact(replyId, t, reply.myReaction)}
+                reactions={optReactions}
+                myReaction={optMyReaction}
+                onReact={handleOptimisticReact}
                 compact
               />
 
@@ -176,7 +233,8 @@ export function ReplyCard({
                 )}
 
                 <button
-                  onClick={() => onReply(replyId)}
+                  // FIX: Pass the bodyText to display what we are replying to
+                  onClick={() => onReply(replyId, bodyText)}
                   className="flex items-center gap-1 text-ink-500 hover:text-ink-900 transition-colors"
                 >
                   <CornerDownRight className="h-3.5 w-3.5" /> Reply
@@ -196,7 +254,6 @@ export function ReplyCard({
           )}
         </motion.div>
 
-        {/* Nested Children Tree */}
         <AnimatePresence>
           {expanded && (
             <motion.div

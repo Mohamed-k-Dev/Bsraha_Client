@@ -6,7 +6,8 @@ import {
   Calendar, 
   MapPin, 
   MessageSquare,
-  Image as ImageIcon
+  Image as ImageIcon,
+  EyeOff
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -19,7 +20,7 @@ import { getMessages } from "@/api/messages.api";
 // import { useAuth } from "@/hooks/useAuth"; // Adjust to how you get the logged-in user!
 import { cn } from "@/utils";
 
-export function ProfilePage() {
+export function PublicProfilePage() {
   // Replace this mock with your actual auth hook or user fetch query
   // const { user } = useAuth(); 
   const user = {

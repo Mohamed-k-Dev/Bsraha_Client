@@ -11,6 +11,10 @@ import {
   Lock,
   AlertTriangle,
   Trash2,
+  Sparkles,
+  Copy,
+  MessageCircle,
+  Facebook,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
@@ -22,11 +26,12 @@ import {
   createMessageReply,
   createReplyToReply,
   deleteMessageReply,
+  updateMessageRepliesVisibility,
 } from "@/api/messages.api";
 import { MessageCard } from "@/components/MessageCard";
 import { ReplyCard } from "@/components/ReplyCard";
 import { Avatar } from "@/components/Avatar";
-import { Spinner, Badge, CopyButton } from "@/components/ui";
+import { Spinner, Badge } from "@/components/ui";
 import { EmptyState, ErrorState } from "@/components/States";
 import type { Message, Reply as ReplyType, ReactionType } from "@/types";
 import { cn } from "@/utils";
@@ -36,11 +41,17 @@ export function MessageDetailsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{
+    id: string;
+    content: string;
+  } | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [isAnonymousReply, setIsAnonymousReply] = useState(true);
 
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isDeleteMessageModalOpen, setIsDeleteMessageModalOpen] =
+    useState(false);
   const [replyToDelete, setReplyToDelete] = useState<string | null>(null);
 
   const {
@@ -66,34 +77,33 @@ export function MessageDetailsPage() {
   });
 
   const replies = repliesData?.replies || [];
+  const messageId = message?._id || message?.id;
+
+  const shareUrl = `${window.location.origin}/messages/${messageId}`;
 
   const replyMutation = useMutation({
     mutationFn: (content: string) => {
-      if (replyingTo) {
+      if (replyTarget)
         return createReplyToReply({
-          replyId: replyingTo,
+          replyId: replyTarget.id,
           content,
           isAnonymous: isAnonymousReply,
         });
-      } else {
-        return createMessageReply({
-          messageId: id!,
-          content,
-          isAnonymous: isAnonymousReply,
-        });
-      }
+      return createMessageReply({
+        messageId: id!,
+        content,
+        isAnonymous: isAnonymousReply,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["message-replies"] });
       queryClient.invalidateQueries({ queryKey: ["reply-replies"] });
       queryClient.invalidateQueries({ queryKey: ["message", id] });
       setReplyBody("");
-      setReplyingTo(null);
+      setReplyTarget(null);
       toast.success("Reply posted successfully!");
     },
-    onError: (err) => {
-      toast.error("Failed to post reply.");
-    },
+    onError: () => toast.error("Failed to post reply."),
   });
 
   const deleteReplyMutation = useMutation({
@@ -105,9 +115,19 @@ export function MessageDetailsPage() {
       toast.success("Reply deleted successfully.");
       setReplyToDelete(null);
     },
-    onError: () => {
-      toast.error("Failed to delete reply.");
+    onError: () => toast.error("Failed to delete reply."),
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.delete(`/message/delete/${id}`);
+      return res.data;
     },
+    onSuccess: () => {
+      toast.success("Message deleted permanently.");
+      navigate("/messages", { replace: true });
+    },
+    onError: () => toast.error("Failed to delete message."),
   });
 
   const togglePublishMutation = useMutation({
@@ -125,6 +145,16 @@ export function MessageDetailsPage() {
     },
   });
 
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: (showReplies: boolean) =>
+      updateMessageRepliesVisibility({ messageId: id!, showReplies }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["message", id] });
+      toast.success("Reply visibility updated.");
+    },
+    onError: () => toast.error("Failed to update visibility."),
+  });
+
   const handleTogglePublishConfirm = () => {
     toast
       .promise(togglePublishMutation.mutateAsync(), {
@@ -132,20 +162,14 @@ export function MessageDetailsPage() {
         success: `Message ${message?.isPublic ? "unpublished" : "published"}!`,
         error: "Failed to update publish status.",
       })
-      .finally(() => {
-        setIsPublishModalOpen(false);
-      });
+      .finally(() => setIsPublishModalOpen(false));
   };
-
-  // --- REACTION MUTATIONS ---
 
   const handleMessageReaction = useMutation({
     mutationFn: async (type: string) => {
-      if (message?.myReaction === type) {
+      if (message?.myReaction === type)
         return api.delete(`/reaction/message/${id}`);
-      } else {
-        return api.post(`/reaction/message/${id}`, { type });
-      }
+      return api.post(`/reaction/message/${id}`, { type });
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["message", id] }),
@@ -161,19 +185,21 @@ export function MessageDetailsPage() {
       type: string;
       currentReaction: string | null;
     }) => {
-      if (currentReaction === type) {
+      if (currentReaction === type)
         return api.delete(`/reaction/reply/${replyId}`);
-      } else {
-        return api.post(`/reaction/reply/${replyId}`, { type });
-      }
+      return api.post(`/reaction/reply/${replyId}`, { type });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["message-replies"] });
       queryClient.invalidateQueries({ queryKey: ["reply-replies"] });
     },
+    onError: () => {
+      toast.error("Failed to react. Reverting changes.");
+      queryClient.invalidateQueries({ queryKey: ["message-replies"] });
+      queryClient.invalidateQueries({ queryKey: ["reply-replies"] });
+    },
   });
 
-  // Action wrappers with Toasts
   const onReactToMessage = (type: string) => {
     toast.promise(handleMessageReaction.mutateAsync(type), {
       pending: "Updating reaction...",
@@ -187,14 +213,7 @@ export function MessageDetailsPage() {
     type: string,
     currentReaction: string | null
   ) => {
-    toast.promise(
-      handleReplyReaction.mutateAsync({ replyId, type, currentReaction }),
-      {
-        pending: "Updating reaction...",
-        success: "Reaction updated!",
-        error: "Failed to react.",
-      }
-    );
+    handleReplyReaction.mutate({ replyId, type, currentReaction });
   };
 
   const handleSubmitReply = () => {
@@ -202,12 +221,33 @@ export function MessageDetailsPage() {
     replyMutation.mutate(replyBody.trim());
   };
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(shareUrl);
+    toast.success("Link copied to clipboard!");
+  };
+
+  const shareToWhatsApp = () => {
+    const text = encodeURIComponent(
+      `Check out this message on Bsraha: ${shareUrl}`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+  };
+
+  const shareToFacebook = () => {
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+        shareUrl
+      )}`,
+      "_blank"
+    );
+  };
+
   const loading = messageLoading || repliesLoading;
   const error = messageError || repliesError;
 
   if (loading) {
     return (
-      <div className="w-full lg:w-3/5 mx-auto px-5 sm:px-8 py-8 sm:py-12">
+      <div className="w-full lg:w-3/5 mx-auto px-5 py-12">
         <div className="h-6 w-24 bg-ink-100 animate-pulse rounded mb-6" />
         <div className="card p-6 space-y-4 bg-white border border-ink-100 rounded-2xl">
           <div className="flex items-center gap-3">
@@ -223,11 +263,11 @@ export function MessageDetailsPage() {
     );
   }
 
-  if (error) {
+  if (error || !message) {
     return (
       <div className="max-w-3xl mx-auto px-5 py-12">
         <ErrorState
-          message={error instanceof Error ? error.message : "Failed to load"}
+          message="Failed to load message"
           onRetry={() => {
             refetchMessage();
             refetchReplies();
@@ -237,24 +277,15 @@ export function MessageDetailsPage() {
     );
   }
 
-  if (!message) {
-    return (
-      <div className="max-w-3xl mx-auto px-5 py-12">
-        <EmptyState
-          icon={<EyeOff className="h-8 w-8" />}
-          title="Message not found"
-          description="This message may have been deleted or never existed."
-          action={
-            <Link to="/messages" className="btn btn-outline">
-              Back to messages
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
-
-  const messageId = message._id || message.id;
+  // Identity logic for share card
+  const loggedInDisplayName =
+    message.receiver?.displayName || message.receiver?.userName || "User";
+  const senderName = message.isAnonymous
+    ? "Anonymous"
+    : message.sender?.displayName || "Someone";
+  const senderSeed = message.isAnonymous
+    ? "anon"
+    : message.sender?.userName || "seed";
 
   return (
     <div className="w-full lg:w-3/5 mx-auto px-5 sm:px-8 py-8 sm:py-12 relative">
@@ -273,6 +304,7 @@ export function MessageDetailsPage() {
         showActions={false}
       />
 
+      {/* Action Bar */}
       <div className="mt-4 flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setIsPublishModalOpen(true)}
@@ -295,25 +327,37 @@ export function MessageDetailsPage() {
         </button>
 
         {message.isPublic && (
-          <CopyButton
-            text={`${window.location.origin}/u/you/m/${messageId}`}
-            className="text-sm px-4 py-2 rounded-xl border border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+          <button
+            onClick={() =>
+              toggleVisibilityMutation.mutate(!message.showReplies)
+            }
+            disabled={toggleVisibilityMutation.isPending}
+            className="text-sm px-4 py-2 rounded-xl border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 flex items-center"
           >
-            <Share2 className="h-4 w-4 inline mr-1.5" /> Share
-          </CopyButton>
+            {message.showReplies
+              ? "Hide Public Replies"
+              : "Show Public Replies"}
+          </button>
         )}
 
-        {message.isPublic ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-moss-50 text-moss-700 border border-moss-200">
-            <Eye className="h-3 w-3" /> Public — visible on your profile
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-ink-100 text-ink-600 border border-ink-200">
-            <Lock className="h-3 w-3" /> Private — only you can see this
-          </span>
+        {message.isPublic && (
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="text-sm px-4 py-2 rounded-xl border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 flex items-center"
+          >
+            <Share2 className="h-4 w-4 mr-1.5" /> Share
+          </button>
         )}
+
+        <button
+          onClick={() => setIsDeleteMessageModalOpen(true)}
+          className="text-sm px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 flex items-center ml-auto"
+        >
+          <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+        </button>
       </div>
 
+      {/* Replies Section */}
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
           <h2 className="font-display text-xl font-semibold text-ink-800">
@@ -322,9 +366,9 @@ export function MessageDetailsPage() {
           <span className="px-2.5 py-0.5 rounded-full text-xs bg-ink-100 text-ink-600 font-mono">
             {message.repliesCount || replies.length}
           </span>
-          {replyingTo && (
+          {replyTarget && (
             <button
-              onClick={() => setReplyingTo(null)}
+              onClick={() => setReplyTarget(null)}
               className="ml-auto text-xs text-ember-600 hover:text-ember-700 underline"
             >
               Cancel reply
@@ -333,10 +377,12 @@ export function MessageDetailsPage() {
         </div>
 
         <div className="card p-4 sm:p-5 mb-6 bg-white border border-ink-100 rounded-2xl shadow-sm">
-          {replyingTo && (
+          {replyTarget && (
             <div className="flex items-center gap-2 mb-3 text-xs text-ink-400">
-              <CornerDownRight className="h-3.5 w-3.5" />
-              Replying to thread
+              <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate max-w-full italic border-l-2 border-ink-200 pl-2">
+                Replying to: "{replyTarget.content}"
+              </span>
             </div>
           )}
 
@@ -420,8 +466,8 @@ export function MessageDetailsPage() {
                 depth={0}
                 messageId={id!}
                 onReact={onReactToReply}
-                onReply={(parentId) => {
-                  setReplyingTo(parentId);
+                onReply={(parentId, content) => {
+                  setReplyTarget({ id: parentId, content });
                   document.querySelector("textarea")?.focus();
                 }}
                 onDelete={(replyId) => setReplyToDelete(replyId)}
@@ -433,14 +479,21 @@ export function MessageDetailsPage() {
         )}
       </div>
 
-      {/* Publish Confirmation Modal */}
       <AnimatePresence>
+        {/* Publish Confirmation Modal */}
         {isPublishModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm"
+            onClick={() => setIsPublishModalOpen(false)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-cardLg border border-ink-100"
             >
               <div className="flex items-center gap-3 mb-3 text-ink-900">
@@ -468,23 +521,28 @@ export function MessageDetailsPage() {
                   disabled={togglePublishMutation.isPending}
                   className="px-4 py-2 rounded-xl text-sm font-medium bg-ink-900 text-white hover:bg-ink-800 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
-                  {togglePublishMutation.isPending && <Spinner size="sm" />}
+                  {togglePublishMutation.isPending && <Spinner size="sm" />}{" "}
                   Confirm
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* Delete Reply Confirmation Modal */}
-      <AnimatePresence>
+        {/* Delete Reply Confirmation Modal */}
         {replyToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm"
+            onClick={() => setReplyToDelete(null)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-cardLg border border-ink-100"
             >
               <div className="flex items-center gap-3 mb-3 text-ink-900">
@@ -510,12 +568,153 @@ export function MessageDetailsPage() {
                   disabled={deleteReplyMutation.isPending}
                   className="px-4 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
-                  {deleteReplyMutation.isPending && <Spinner size="sm" />}
+                  {deleteReplyMutation.isPending && <Spinner size="sm" />}{" "}
                   Delete
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
+        )}
+
+        {/* Delete MAIN Message Modal */}
+        {isDeleteMessageModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm"
+            onClick={() => setIsDeleteMessageModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-cardLg border border-ink-100"
+            >
+              <div className="flex items-center gap-3 mb-3 text-ink-900">
+                <Trash2 className="h-6 w-6 text-red-500" />
+                <h3 className="font-display font-semibold text-lg">
+                  Delete Message?
+                </h3>
+              </div>
+              <p className="text-sm text-ink-600 mb-6 text-pretty">
+                Are you sure you want to permanently delete this entire
+                conversation? All nested replies will also be deleted. This
+                cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setIsDeleteMessageModalOpen(false)}
+                  disabled={deleteMessageMutation.isPending}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-ink-600 hover:bg-ink-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteMessageMutation.mutate()}
+                  disabled={deleteMessageMutation.isPending}
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {deleteMessageMutation.isPending && <Spinner size="sm" />}{" "}
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Brand-Identity Share Modal */}
+        {isShareModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm"
+            onClick={() => setIsShareModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white text-ink-900 rounded-3xl p-6 max-w-md w-full shadow-cardLg border border-ink-100 relative"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-ember-500" />
+                  <h3 className="font-display font-semibold text-lg">
+                    Share Message
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsShareModalOpen(false)}
+                  className="text-ink-400 hover:text-ink-900 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Styled Identity Preview Card */}
+              <div className="bg-paper-50 border border-ink-100 rounded-2xl p-6 mb-6 relative shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-ink-900 text-white p-1 rounded">
+                      <span className="font-bold text-xs px-1">B</span>
+                    </div>
+                    <span className="font-bold text-sm text-ink-900">
+                      Bsraha بصراحة
+                    </span>
+                  </div>
+                  <span className="px-3 py-1 bg-ink-100 text-ink-600 rounded-full text-[10px] font-mono tracking-widest uppercase">
+                    Secret Note
+                  </span>
+                </div>
+
+                <p className="font-serif text-lg leading-relaxed text-ink-800 mb-8 italic">
+                  "{message.content}"
+                </p>
+
+                <div className="border-t border-ink-200 pt-4 flex items-center justify-between mt-auto">
+                  <div className="flex items-center gap-2">
+                    <Avatar
+                      name={senderName}
+                      seed={senderSeed}
+                      size="sm"
+                      anonymous={message.isAnonymous}
+                    />
+                    <span className="text-sm font-medium text-ink-900">
+                      {message.isAnonymous
+                        ? "Anonymous"
+                        : `@${senderName.replace(/\s+/g, "")}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <button
+                  onClick={copyToClipboard}
+                  className="flex items-center justify-center gap-2 py-3 bg-ink-50 hover:bg-ink-100 border border-ink-200 rounded-xl text-sm font-medium transition-colors text-ink-800"
+                >
+                  <Copy className="h-4 w-4" /> Copy Link
+                </button>
+                <button
+                  onClick={shareToFacebook}
+                  className="flex items-center justify-center gap-2 py-3 bg-[#1877F2] hover:bg-[#0C63D4] text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                  <Facebook className="h-4 w-4" /> Facebook
+                </button>
+              </div>
+              <button
+                onClick={shareToWhatsApp}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl text-sm font-medium transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" /> Share to WhatsApp
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

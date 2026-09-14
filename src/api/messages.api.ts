@@ -139,14 +139,16 @@ export const createReplyToReply = async ({
     content,
     isAnonymous,
   });
-  
+
   const rawReply = res.data?.data?.reply;
   return {
     ...rawReply,
     id: rawReply._id || rawReply.id,
     body: rawReply.content || rawReply.body,
-    authorDisplayName: rawReply.sender?.displayName || rawReply.authorDisplayName || "Anonymous",
-    authorAvatarSeed: rawReply.sender?.userName || rawReply.sender?._id || "seed",
+    authorDisplayName:
+      rawReply.sender?.displayName || rawReply.authorDisplayName || "Anonymous",
+    authorAvatarSeed:
+      rawReply.sender?.userName || rawReply.sender?._id || "seed",
     authorId: rawReply.sender?._id || rawReply.sender,
     reactions: Array.isArray(rawReply.reactions) ? rawReply.reactions : [],
     myReaction: null,
@@ -167,5 +169,18 @@ export const reactToReply = async ({
 
 export const deleteMessageReply = async (replyId: string) => {
   const res = await api.delete(`/reply/${replyId}`);
+  return res.data;
+};
+
+export const updateMessageRepliesVisibility = async ({
+  messageId,
+  showReplies,
+}: {
+  messageId: string;
+  showReplies: boolean;
+}) => {
+  const res = await api.patch(`/message/${messageId}/replies-visibility`, {
+    showReplies,
+  });
   return res.data;
 };
