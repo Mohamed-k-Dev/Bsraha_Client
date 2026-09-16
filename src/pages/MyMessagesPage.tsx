@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 
 import { api } from "@/api/axios";
 import { getMessages } from "@/api/messages.api";
+import { getUserProfile } from "@/api/user.api"; // NEW IMPORT ADDED
 import { reactToTarget, removeReaction } from "@/api/reactions.api";
 import { MessageCard } from "@/components/MessageCard";
 import { MessageCardSkeleton } from "@/components/Skeleton";
@@ -24,7 +25,6 @@ export function MyMessagesPage() {
   const currentFilter = (searchParams.get("tab") as Filter) || "all";
   const [page, setPage] = useState(1);
 
-  // Reset to page 1 whenever the filter changes
   useEffect(() => {
     setPage(1);
   }, [currentFilter]);
@@ -37,6 +37,12 @@ export function MyMessagesPage() {
     isOpen: false,
     messageId: null,
     currentStatus: false,
+  });
+
+  // Fetch logged in user to check ownership securely
+  const { data: user } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: getUserProfile,
   });
 
   // Fetch paginated messages
@@ -68,7 +74,6 @@ export function MyMessagesPage() {
       });
     },
     onSuccess: () => {
-      // Invalidate specific page cache
       queryClient.invalidateQueries({
         queryKey: ["my-messages", currentFilter, page],
       });
@@ -152,7 +157,6 @@ export function MyMessagesPage() {
         </p>
       </motion.div>
 
-      {/* Filter Tabs */}
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide flex-wrap ">
         {filters.map((f) => (
           <button
@@ -171,7 +175,6 @@ export function MyMessagesPage() {
         ))}
       </div>
 
-      {/* Messages Grid */}
       <div className="flex-1">
         {isLoading ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -217,14 +220,13 @@ export function MyMessagesPage() {
                   })
                 }
                 linkable
+                currentUserId={user?._id || user?.id} // FIX: NOW IT KNOWS YOU ARE THE OWNER
               />
             ))}
           </motion.div>
         )}
       </div>
 
-      {/* Pagination Controls */}
-      {/* Pagination Footer Controls */}
       {pagination && pagination.totalPages > 1 && (
         <div className="mt-10 flex items-center justify-between border-t border-ink-100 pt-6">
           <button
@@ -234,11 +236,9 @@ export function MyMessagesPage() {
           >
             Previous
           </button>
-
           <span className="text-sm font-medium text-ink-500">
             Page {pagination.page} of {pagination.totalPages}
           </span>
-
           <button
             disabled={!pagination.hasNextPage}
             onClick={() => setPage((p) => p + 1)}
@@ -249,7 +249,6 @@ export function MyMessagesPage() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
       <AnimatePresence>
         {publishModal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

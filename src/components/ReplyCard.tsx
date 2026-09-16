@@ -27,11 +27,11 @@ interface ReplyCardProps {
     type: ReactionType,
     currentReaction: string | null
   ) => void;
-  // FIX: Pass content back to parent
   onReply: (parentId: string, content: string) => void;
   onDelete?: (replyId: string) => void;
   onToggleVisibility?: (replyId: string) => void;
   isMessageOwner: boolean;
+  currentUserId?: string | null;
 }
 
 export function ReplyCard({
@@ -43,20 +43,44 @@ export function ReplyCard({
   onDelete,
   onToggleVisibility,
   isMessageOwner,
+  currentUserId,
 }: ReplyCardProps) {
   const [expanded, setExpanded] = useState(false);
 
+  // FIX: Extract global reactions properly from reactionSummary.types object if reactions.types is empty
+  const extractReactionsList = (replyData: any) => {
+    // If reactions.types has items, use it
+    if (
+      Array.isArray(replyData.reactions?.types) &&
+      replyData.reactions.types.length > 0
+    ) {
+      return replyData.reactions.types;
+    }
+    // Otherwise, parse them from reactionSummary.types object (e.g., { heart: 1, angry: 1, ... })
+    const summaryTypes = replyData.reactionSummary?.types;
+    if (summaryTypes && typeof summaryTypes === "object") {
+      return Object.entries(summaryTypes)
+        .filter(
+          ([key, count]) =>
+            key !== "_id" && typeof count === "number" && count > 0
+        )
+        .map(([type, count]) => ({ type, count }));
+    }
+    return [];
+  };
+
   const [optMyReaction, setOptMyReaction] = useState<string | null>(
-    reply.myReaction || null
+    reply.reactions?.myReaction || reply.myReaction || null
   );
+
   const [optReactions, setOptReactions] = useState<any[]>(
-    reply.reactions || []
+    extractReactionsList(reply)
   );
 
   useEffect(() => {
-    setOptMyReaction(reply.myReaction || null);
-    setOptReactions(reply.reactions || []);
-  }, [reply.myReaction, reply.reactions]);
+    setOptMyReaction(reply.reactions?.myReaction || reply.myReaction || null);
+    setOptReactions(extractReactionsList(reply));
+  }, [reply]);
 
   const handleOptimisticReact = (type: string) => {
     const prevReaction = optMyReaction;
@@ -83,7 +107,7 @@ export function ReplyCard({
     }
     setOptReactions(updatedReactions.filter((r) => r.count > 0));
 
-    onReact(reply.id || reply._id, type, prevReaction);
+    onReact(reply.id || reply._id, type as ReactionType, prevReaction);
   };
 
   const replyId = reply.id || reply._id;
@@ -92,12 +116,14 @@ export function ReplyCard({
     ? "Anonymous"
     : reply.authorDisplayName || reply.sender?.displayName || "User";
   const avatarSeed = reply.sender?.userName || reply.authorAvatarSeed || "seed";
-  const authorUsername = reply.sender?.userName;
 
-  const isMine =
-    reply.isMine ||
-    reply.sender?._id === reply.currentUserId ||
-    authorName.includes("@Bsraha");
+  const replySenderId =
+    reply.sender?._id ||
+    reply.sender?.id ||
+    reply.authorId ||
+    (typeof reply.sender === "string" ? reply.sender : null);
+
+  const isMine = Boolean(currentUserId && replySenderId === currentUserId);
   const canModerate = isMessageOwner || isMine;
 
   const { data: subRepliesData, isLoading: loadingSubReplies } = useQuery({
@@ -158,13 +184,14 @@ export function ReplyCard({
                 </button>
               ) : (
                 <Link
-                  to={`/u/${authorUsername}`}
+                  to={`/u/${encodeURIComponent(
+                    authorName.replace(/@Bsraha/gi, "").trim()
+                  )}`}
                   className="font-display font-semibold text-ink-900 text-sm truncate hover:text-ember-600 transition-colors"
                 >
-                  {authorName}
+                  {authorName.replace(/@Bsraha/gi, "").trim()}
                 </Link>
               )}
-
               {isMine && (
                 <Badge
                   variant="ember"
@@ -233,7 +260,6 @@ export function ReplyCard({
                 )}
 
                 <button
-                  // FIX: Pass the bodyText to display what we are replying to
                   onClick={() => onReply(replyId, bodyText)}
                   className="flex items-center gap-1 text-ink-500 hover:text-ink-900 transition-colors"
                 >
@@ -282,6 +308,7 @@ export function ReplyCard({
                     onDelete={onDelete}
                     onToggleVisibility={onToggleVisibility}
                     isMessageOwner={isMessageOwner}
+                    currentUserId={currentUserId}
                   />
                 ))
               )}

@@ -30,20 +30,19 @@ const typingContainer = {
   hidden: { opacity: 1 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.06 }, // Typing speed
+    transition: { staggerChildren: 0.06 },
   },
 };
 
 const typingChar = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0 } }, // Instant pop-in like a keyboard
+  show: { opacity: 1, transition: { duration: 0 } },
 };
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
-
-  // Grab the setMobileOpen function from the parent AppLayout
   const { setMobileOpen } = useOutletContext();
+
   const [publishModal, setPublishModal] = useState<{
     isOpen: boolean;
     messageId: string | null;
@@ -53,6 +52,8 @@ export function DashboardPage() {
     messageId: null,
     currentStatus: false,
   });
+
+  // Fetching the currently logged in user
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ["user-profile"],
     queryFn: getUserProfile,
@@ -107,7 +108,6 @@ export function DashboardPage() {
           const currentTypes = msg.reactions?.types || [];
           const oldMyReaction = msg.reactions?.myReaction;
 
-          // Recalculate counts optimistically
           let newTotal = msg.reactions?.total || 0;
           const updatedTypes = currentTypes.map((item: any) => {
             let count = item.count;
@@ -176,7 +176,6 @@ export function DashboardPage() {
 
     const shouldPublish = !publishModal.currentStatus;
 
-    // Trigger the mutation and wrap it with toast.promise for automated pending/success/error states
     const mutationPromise = togglePublishMutation.mutateAsync({
       messageId: publishModal.messageId,
       shouldPublish,
@@ -217,16 +216,12 @@ export function DashboardPage() {
 
   const handleReact = useCallback(
     (messageId: string, type: ReactionType) => {
-      // Find the message in the current cache
       const message = messages.find(
         (m: Message) => (m._id || m.id) === messageId
       );
 
-      // Extract the user's active reaction from your backend's nested object structure
       const currentMyReaction =
         message?.reactions?.myReaction || message?.myReaction;
-
-      // If clicking the exact same reaction icon they already picked, remove it
       const isRemoving = currentMyReaction === type;
 
       reactionMutation.mutate({ messageId, type, isRemoving });
@@ -241,14 +236,12 @@ export function DashboardPage() {
 
   return (
     <div className="w-full lg:w-3/4 mx-auto px-5 sm:px-8 py-8 sm:py-12">
-      {/* Header with Menu Button & Blur Animation */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-10"
       >
         <div className="flex items-center gap-3">
-          {/* MOBILE MENU BUTTON - Right next to the text */}
           <button
             onClick={() => setMobileOpen(true)}
             className="md:hidden p-2 -ml-2 text-ink-900 bg-white border border-ink-200 hover:bg-ink-50 rounded-xl transition-colors shadow-sm"
@@ -267,7 +260,6 @@ export function DashboardPage() {
               >
                 {nameChars.map((char, i) => (
                   <motion.span key={i} variants={typingChar}>
-                    {/* Preserve spaces during mapping */}
                     {char === " " ? "\u00A0" : char}
                   </motion.span>
                 ))}
@@ -368,7 +360,6 @@ export function DashboardPage() {
         </Link>
       </div>
 
-      {/* Recent messages header */}
       <div className="mb-6 flex items-center justify-between">
         <h2 className="font-display text-xl font-semibold text-ink-800">
           Recent messages
@@ -381,7 +372,6 @@ export function DashboardPage() {
         </Link>
       </div>
 
-      {/* 2 Message Boxes Per Row Grid */}
       {messagesLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -421,17 +411,15 @@ export function DashboardPage() {
               onReact={(t) => handleReact(m._id || m.id, t)}
               onTogglePublish={() => handleOpenPublishModal(m._id || m.id)}
               linkable
+              currentUserId={user?._id || user?.id} // FIX: NOW IT KNOWS YOU ARE THE OWNER
             />
           ))}
         </div>
       )}
-      {/* ========================================= */}
-      {/* APP-STYLED PUBLISH CONFIRMATION MODAL     */}
-      {/* ========================================= */}
+
       <AnimatePresence>
         {publishModal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Blurred Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -445,8 +433,6 @@ export function DashboardPage() {
               }
               className="absolute inset-0 bg-ink-900/30 backdrop-blur-md"
             />
-
-            {/* Modal Card matching your design system */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

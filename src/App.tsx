@@ -35,7 +35,7 @@ function App() {
             {/* Public routes */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<LandingPage />} />
-              <Route path="/u/:username" element={<PublicProfilePage />} />
+              {/* <Route path="/u/:username" element={<PublicProfilePage />} /> */}
             </Route>
 
             {/* Auth routes */}
@@ -60,8 +60,8 @@ function App() {
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/profile/:displayName" element={<ProfilePage />} />
-              </Route>{" "}
+                <Route path="/u/:displayName" element={<PublicProfilePage />} />
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

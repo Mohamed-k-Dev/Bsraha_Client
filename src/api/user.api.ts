@@ -23,3 +23,7 @@ export const searchUsers = async ({
   });
   return res.data?.data || { users: [], pagination: {} };
 };
+const getPublicUserProfile = async (displayName: string) => {
+  const res = await api.get(`/user/profile/${encodeURIComponent(displayName)}`);
+  return res.data?.data;
+};

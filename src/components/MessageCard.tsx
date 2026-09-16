@@ -10,11 +10,12 @@ import { formatRelativeTime, totalReactions, formatNumber, cn } from "@/utils";
 
 interface MessageCardProps {
   id?: string;
-  message: Message;
+  message: Message | any;
   onReact?: (type: ReactionType) => void;
   onTogglePublish?: (id: string) => void;
   variant?: "default" | "feed" | "compact";
   showActions?: boolean;
+  currentUserId?: string;
 }
 
 export function MessageCard({
@@ -23,11 +24,12 @@ export function MessageCard({
   onTogglePublish,
   variant = "default",
   showActions = true,
+  currentUserId,
 }: MessageCardProps) {
   const [anonNotice, setAnonNotice] = useState(false);
 
-  const messageId = message._id;
-  const content = message.content;
+  const messageId = message._id || message.id;
+  const content = message.content || message.body;
   const replyCount = message.repliesCount ?? message.replyCount ?? 0;
 
   const senderDisplayName =
@@ -38,6 +40,8 @@ export function MessageCard({
   const rawReactions = message.reactions;
   const safeReactions = Array.isArray(rawReactions?.types)
     ? rawReactions.types
+    : Array.isArray(rawReactions)
+    ? rawReactions
     : [];
   const myActiveReaction =
     rawReactions?.myReaction || message.myReaction || null;
@@ -49,6 +53,23 @@ export function MessageCard({
     setAnonNotice(true);
     setTimeout(() => setAnonNotice(false), 3000);
   };
+
+  const senderId =
+    message.sender?._id ||
+    message.sender?.id ||
+    (typeof message.sender === "string" ? message.sender : null);
+  const receiverId =
+    message.receiver?._id ||
+    message.receiver?.id ||
+    (typeof message.receiver === "string" ? message.receiver : null);
+
+  const isOwnerOrSender = Boolean(
+    currentUserId &&
+      (currentUserId === senderId || currentUserId === receiverId)
+  );
+
+  // FIX: Owners/receivers always see the reply icon. Others only see it if showReplies is true.
+  const canShowRepliesLink = message.showReplies === true || isOwnerOrSender;
 
   return (
     <motion.article
@@ -63,7 +84,6 @@ export function MessageCard({
         message.isPublic && "ring-1 ring-moss-200/50"
       )}
     >
-      {/* Anonymous Toast Notice */}
       <AnimatePresence>
         {anonNotice && (
           <motion.div
@@ -80,7 +100,6 @@ export function MessageCard({
         )}
       </AnimatePresence>
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <Avatar
@@ -102,7 +121,7 @@ export function MessageCard({
               ) : senderUsername ? (
                 <Link
                   to={`/profile/${encodeURIComponent(cleanProfileName)}`}
-                  onClick={(e) => e.stopPropagation()} // Prevents card-level link conflicts
+                  onClick={(e) => e.stopPropagation()}
                   className="font-display font-semibold text-ink-800 text-sm sm:text-base hover:text-ember-600 transition-colors truncate"
                 >
                   {senderDisplayName}
@@ -119,7 +138,6 @@ export function MessageCard({
           </div>
         </div>
 
-        {/* Public / Private Indicator */}
         {message.isPublic ? (
           <Badge variant="public" className="shrink-0 text-[11px] px-2 py-0.5">
             <Eye className="h-3 w-3" /> Public
@@ -131,7 +149,6 @@ export function MessageCard({
         )}
       </div>
 
-      {/* Body */}
       <p
         className={cn(
           "text-ink-800 text-pretty leading-relaxed break-words",
@@ -141,9 +158,7 @@ export function MessageCard({
         {content}
       </p>
 
-      {/* Footer / Actions */}
       <div className="mt-4 pt-3 border-t border-ink-100/60 flex items-center justify-between gap-2 flex-wrap">
-        {/* Direct Inline Reaction Bar */}
         <div onClick={(e) => e.stopPropagation()}>
           <ReactionBar
             reactions={safeReactions}
@@ -155,23 +170,25 @@ export function MessageCard({
 
         {showActions && (
           <div className="flex items-center gap-2.5 sm:gap-3 ml-auto">
-            <Link
-              to={`/messages/${messageId}`}
-              className="flex items-center gap-1.5 text-xs sm:text-sm text-ink-500 hover:text-ink-800 transition-colors py-1 px-1.5 rounded-lg hover:bg-ink-50"
-              title="View replies"
-            >
-              <MessageCircle className="h-4 w-4" />
-              <span className="font-mono text-xs tabular-nums">
-                {formatNumber(replyCount)}
-              </span>
-            </Link>
+            {canShowRepliesLink && (
+              <Link
+                to={`/messages/${messageId}`}
+                className="flex items-center gap-1.5 text-xs sm:text-sm text-ink-500 hover:text-ink-800 transition-colors py-1 px-1.5 rounded-lg hover:bg-ink-50"
+                title="View replies"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="font-mono text-xs tabular-nums">
+                  {formatNumber(replyCount)}
+                </span>
+              </Link>
+            )}
 
             {onTogglePublish && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
-                  e.stopPropagation(); // Stops the click from bubbling up to the card's main link
+                  e.stopPropagation();
                   onTogglePublish(messageId);
                 }}
                 className={cn(
