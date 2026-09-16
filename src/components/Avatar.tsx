@@ -6,6 +6,7 @@ interface AvatarProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   anonymous?: boolean;
   className?: string;
+  src?:string
 }
 
 const sizes = {
@@ -17,7 +18,7 @@ const sizes = {
   '2xl': 'h-28 w-28 text-3xl',
 };
 
-export function Avatar({ name, seed, size = 'md', anonymous, className }: AvatarProps) {
+export function Avatar({ name, seed, size = 'md', anonymous, className ,src}: AvatarProps) {
   if (anonymous) {
     return (
       <div
@@ -33,6 +34,18 @@ export function Avatar({ name, seed, size = 'md', anonymous, className }: Avatar
           <path d="M12 2a5 5 0 0 0-5 5v3a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5Z" />
           <path d="M5 14a7 7 0 0 0 14 0" />
         </svg>
+      </div>
+    );
+  }
+
+  if(src) {
+    return (
+      <div
+        className={cn('flex items-center justify-center rounded-full font-display font-semibold text-white shrink-0 shadow-sm overflow-hidden', sizes[size], className)}
+        style={{ background: avatarGradient(seed) }}
+        aria-label={name}
+      >
+        <img src={src} alt={name} className="h-full w-full object-cover" />
       </div>
     );
   }

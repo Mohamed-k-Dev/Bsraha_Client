@@ -76,6 +76,8 @@ export function DashboardPage() {
 
   const messages = data?.messages || [];
 
+  console.log(messages);
+
   const reactionMutation = useMutation({
     mutationFn: async ({
       messageId,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, MessageCircle, Lock, AlertCircle } from "lucide-react";
@@ -27,10 +27,11 @@ export function MessageCard({
   currentUserId,
 }: MessageCardProps) {
   const [anonNotice, setAnonNotice] = useState(false);
-
   const messageId = message._id || message.id;
   const content = message.content || message.body;
-  const replyCount = message.repliesCount ?? message.replyCount ?? 0;
+  const replyCount =
+    message.repliesCount ?? message.replyCount ?? message.commentsCount ?? 0;
+
 
   const senderDisplayName =
     message.sender?.displayName || (message.isAnonymous ? "Anonymous" : "User");
@@ -43,6 +44,7 @@ export function MessageCard({
     : Array.isArray(rawReactions)
     ? rawReactions
     : [];
+
   const myActiveReaction =
     rawReactions?.myReaction || message.myReaction || null;
   const total = rawReactions?.total ?? totalReactions(safeReactions);
@@ -65,10 +67,10 @@ export function MessageCard({
 
   const isOwnerOrSender = Boolean(
     currentUserId &&
-      (currentUserId === senderId || currentUserId === receiverId)
+      (String(currentUserId) === String(senderId) ||
+        String(currentUserId) === String(receiverId))
   );
 
-  // FIX: Owners/receivers always see the reply icon. Others only see it if showReplies is true.
   const canShowRepliesLink = message.showReplies === true || isOwnerOrSender;
 
   return (
@@ -107,6 +109,7 @@ export function MessageCard({
             seed={senderUsername || "anon"}
             size={variant === "compact" ? "sm" : "md"}
             anonymous={message.isAnonymous}
+            src={message.sender?.image?.url}
           />
           <div className="min-w-0 flex flex-col">
             <div className="flex items-center gap-2">
@@ -120,7 +123,7 @@ export function MessageCard({
                 </button>
               ) : senderUsername ? (
                 <Link
-                  to={`/profile/${encodeURIComponent(cleanProfileName)}`}
+                  to={`/u/${encodeURIComponent(cleanProfileName)}`}
                   onClick={(e) => e.stopPropagation()}
                   className="font-display font-semibold text-ink-800 text-sm sm:text-base hover:text-ember-600 transition-colors truncate"
                 >

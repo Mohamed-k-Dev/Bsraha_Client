@@ -25,14 +25,30 @@ import { MessageCard } from "@/components/MessageCard";
 import { Spinner } from "@/components/ui";
 import { EmptyState, ErrorState } from "@/components/States";
 import { api } from "@/api/axios";
-import { getUserProfile } from "@/api/user.api"; // NEW IMPORT ADDED
+import { getUserProfile } from "@/api/user.api";
 import { reactToTarget, removeReaction } from "@/api/reactions.api";
 import { sendMessage } from "@/api/messages.api";
 import { cn } from "@/utils";
 
 const getPublicUserProfile = async (displayName: string) => {
-  const res = await api.get(`/user/profile/${encodeURIComponent(displayName)}`);
-  return res.data?.data;
+  const cleanName = displayName.replace(/@Bsraha/gi, "").trim();
+
+  const [profileRes, messagesRes] = await Promise.allSettled([
+    api.get(`/user/profile/${encodeURIComponent(cleanName)}`),
+    api.get(`/message/public/${encodeURIComponent(cleanName)}`),
+  ]);
+
+  const profileData =
+    profileRes.status === "fulfilled" ? profileRes.value.data?.data : null;
+  const messagesData =
+    messagesRes.status === "fulfilled" ? messagesRes.value.data?.data : null;
+
+  return {
+    profile: profileData?.profile || profileData?.user || profileData,
+    messages:
+      messagesData?.messages ||
+      (Array.isArray(messagesData) ? messagesData : []),
+  };
 };
 
 export function PublicProfilePage() {
@@ -40,11 +56,10 @@ export function PublicProfilePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // FIX: Securely check if the person viewing this profile happens to be logged in
   const { data: currentUserProfile } = useQuery({
     queryKey: ["user-profile"],
     queryFn: getUserProfile,
-    retry: false, // Fails quietly if the viewer is a stranger/not logged in
+    retry: false,
   });
 
   const [currentCoverIdx, setCurrentCoverIdx] = useState(0);
@@ -69,6 +84,19 @@ export function PublicProfilePage() {
   const publishedMessages = profileData?.messages || [];
   const coverImages: any[] = profile?.coverImages || [];
 
+  // ROBUST & SAFE ID-BASED OWNERSHIP CHECK
+  const currentUserId =
+    currentUserProfile?._id ||
+    currentUserProfile?.id ||
+    currentUserProfile?.user?._id;
+  const profileId = profile?._id || profile?.id || profile?.user?._id;
+
+  const isProfileOwner = Boolean(
+    currentUserId &&
+      profileId &&
+      String(currentUserId).trim() === String(profileId).trim()
+  );
+
   useEffect(() => {
     if (coverImages.length <= 1) return;
     const interval = setInterval(() => {
@@ -77,7 +105,9 @@ export function PublicProfilePage() {
     return () => clearInterval(interval);
   }, [coverImages.length]);
 
-  const cleanDisplayName = profile?.displayName
+  const cleanDisplayName = displayName
+    ? displayName.replace(/@Bsraha/gi, "").trim()
+    : profile?.displayName
     ? profile.displayName.replace(/@Bsraha/gi, "").trim()
     : "";
 
@@ -112,35 +142,39 @@ export function PublicProfilePage() {
 
       queryClient.setQueryData(["public-profile", displayName], (old: any) => {
         if (!old) return old;
-        return {
-          ...old,
-          messages: old.messages.map((msg: any) => {
-            if ((msg._id || msg.id) !== messageId) return msg;
-            const isRemoving = currentReaction === type;
-            const newMyReaction = isRemoving ? null : type;
+        const messagesList = old.messages || [];
+        const updatedList = Array.isArray(messagesList)
+          ? messagesList.map((msg: any) => {
+              if ((msg._id || msg.id) !== messageId) return msg;
+              const isRemoving = currentReaction === type;
+              const newMyReaction = isRemoving ? null : type;
 
-            let updatedTypes = [...(msg.reactions?.types || [])];
-            if (currentReaction) {
-              const prev = updatedTypes.find((t) => t.type === currentReaction);
-              if (prev) prev.count = Math.max(0, prev.count - 1);
-            }
-            if (!isRemoving) {
-              const curr = updatedTypes.find((t) => t.type === type);
-              if (curr) curr.count += 1;
-              else updatedTypes.push({ type, count: 1 });
-            }
+              let updatedTypes = [...(msg.reactions?.types || [])];
+              if (currentReaction) {
+                const prev = updatedTypes.find(
+                  (t) => t.type === currentReaction
+                );
+                if (prev) prev.count = Math.max(0, prev.count - 1);
+              }
+              if (!isRemoving) {
+                const curr = updatedTypes.find((t) => t.type === type);
+                if (curr) curr.count += 1;
+                else updatedTypes.push({ type, count: 1 });
+              }
 
-            return {
-              ...msg,
-              myReaction: newMyReaction,
-              reactions: {
-                ...msg.reactions,
+              return {
+                ...msg,
                 myReaction: newMyReaction,
-                types: updatedTypes,
-              },
-            };
-          }),
-        };
+                reactions: {
+                  ...msg.reactions,
+                  myReaction: newMyReaction,
+                  types: updatedTypes,
+                },
+              };
+            })
+          : messagesList;
+
+        return { ...old, messages: updatedList };
       });
 
       return { previousData };
@@ -177,9 +211,9 @@ export function PublicProfilePage() {
 
   const togglePublishMutation = useMutation({
     mutationFn: async (messageId: string) => {
-      const targetMsg = publishedMessages.find(
-        (m: any) => (m._id || m.id) === messageId
-      );
+      const targetMsg = (
+        Array.isArray(publishedMessages) ? publishedMessages : []
+      ).find((m: any) => (m._id || m.id) === messageId);
       const endpoint = targetMsg?.isPublic
         ? `/message/unPublish/${messageId}`
         : `/message/publish/${messageId}`;
@@ -199,7 +233,6 @@ export function PublicProfilePage() {
   });
 
   const handlePublishToggleClick = (messageId: string) => {
-    if (!profile) return;
     setSelectedMessageForPublish(messageId);
   };
 
@@ -265,6 +298,10 @@ export function PublicProfilePage() {
       </div>
     );
   }
+
+  const messagesArray = Array.isArray(publishedMessages)
+    ? publishedMessages
+    : [];
 
   return (
     <div className="min-h-screen bg-paper-50 pb-20">
@@ -340,7 +377,7 @@ export function PublicProfilePage() {
           className="flex justify-center -mt-16 sm:-mt-20 relative z-10"
         >
           <div className="p-1.5 bg-paper-50 rounded-full shadow-sm">
-            {profile.image?.url ? (
+            {profile?.image?.url ? (
               <img
                 src={profile.image.url}
                 alt={cleanDisplayName}
@@ -349,7 +386,7 @@ export function PublicProfilePage() {
             ) : (
               <Avatar
                 name={cleanDisplayName}
-                seed={profile.userName || cleanDisplayName}
+                seed={profile?.userName || cleanDisplayName}
                 size="2xl"
                 className="h-28 w-28 sm:h-36 sm:w-36 text-4xl shadow-inner border border-ink-100"
               />
@@ -367,10 +404,10 @@ export function PublicProfilePage() {
             {cleanDisplayName}
           </h1>
           <p className="text-ink-400 font-mono text-sm sm:text-base mt-1">
-            @{profile.userName}
+            @{profile?.userName || displayName}
           </p>
           <p className="max-w-2xl mx-auto mt-4 text-ink-800 text-sm sm:text-[15px] leading-relaxed text-pretty">
-            {profile.bio || "This user hasn't written a bio yet."}
+            {profile?.bio || "This user hasn't written a bio yet."}
           </p>
           <div className="flex items-center justify-center gap-3 mt-6">
             <button
@@ -388,25 +425,25 @@ export function PublicProfilePage() {
           transition={{ delay: 0.3 }}
           className="flex flex-wrap items-center justify-center gap-3 mt-8 max-w-3xl mx-auto"
         >
-          {profile.email && (
+          {profile?.email && (
             <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
               <Mail className="h-4 w-4 text-ink-400" />
               {profile.email}
             </div>
           )}
-          {profile.phone && (
+          {profile?.phone && (
             <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
               <Phone className="h-4 w-4 text-ink-400" />
               {profile.phone}
             </div>
           )}
-          {profile.gender && (
+          {profile?.gender && (
             <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
               <UserIcon className="h-4 w-4 text-ink-400" />
               {profile.gender}
             </div>
           )}
-          {profile.age && (
+          {profile?.age && (
             <div className="flex items-center gap-2 px-4 py-2 bg-white border border-ink-200 rounded-full shadow-sm text-sm font-medium text-ink-700">
               <Calendar className="h-4 w-4 text-ink-400" />
               {profile.age} years old
@@ -414,83 +451,86 @@ export function PublicProfilePage() {
           )}
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="mt-12 mx-auto bg-white border border-ink-100 rounded-3xl p-6 shadow-sm"
-        >
-          <div className="mb-4">
-            <h3 className="font-display font-semibold text-lg text-ink-900">
-              Send Note to {cleanDisplayName}
-            </h3>
-            <p className="text-xs text-ink-400 font-mono mt-0.5">
-              Say what's on your mind completely honestly.
-            </p>
-          </div>
-          <form onSubmit={handleSendMessage} className="space-y-4">
-            <div>
-              <label className="block text-[12px] font-bold tracking-wider text-ink-400 uppercase mb-2">
-                Send identity
-              </label>
-              <div className="flex p-1.5 bg-ink-50 rounded-xl border border-ink-100 gap-2">
+        {/* SEND NOTE BOX: Hidden ONLY if the logged-in viewer is the owner of this profile */}
+        {!isProfileOwner && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="mt-12 mx-auto bg-white border border-ink-100 rounded-3xl p-6 shadow-sm"
+          >
+            <div className="mb-4">
+              <h3 className="font-display font-semibold text-lg text-ink-900">
+                Send Note to {cleanDisplayName}
+              </h3>
+              <p className="text-xs text-ink-400 font-mono mt-0.5">
+                Say what's on your mind completely honestly.
+              </p>
+            </div>
+            <form onSubmit={handleSendMessage} className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-bold tracking-wider text-ink-400 uppercase mb-2">
+                  Send identity
+                </label>
+                <div className="flex p-1.5 bg-ink-50 rounded-xl border border-ink-100 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAnonymous(true)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all",
+                      isAnonymous
+                        ? "bg-ember-500 text-white shadow-sm"
+                        : "text-ink-600 hover:text-ink-900 hover:bg-ink-100/50"
+                    )}
+                  >
+                    <Lock className="h-3.5 w-3.5" /> Secret (Anonymous)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAnonymous(false)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all",
+                      !isAnonymous
+                        ? "bg-ink-900 text-white shadow-sm"
+                        : "text-ink-600 hover:text-ink-900 hover:bg-ink-100/50"
+                    )}
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Identified
+                  </button>
+                </div>
+              </div>
+              <div>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value.slice(0, 800))}
+                  placeholder={`Write something to ${cleanDisplayName}...`}
+                  rows={4}
+                  className="w-full resize-none rounded-2xl border border-ink-200 bg-paper-50 px-4 py-3 text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-ember-400 focus:border-transparent transition text-sm"
+                />
+                <div className="flex justify-end mt-1">
+                  <span className="text-xs text-ink-400 font-mono">
+                    {content.length}/800
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-end">
                 <button
-                  type="button"
-                  onClick={() => setIsAnonymous(true)}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all",
-                    isAnonymous
-                      ? "bg-ember-500 text-white shadow-sm"
-                      : "text-ink-600 hover:text-ink-900 hover:bg-ink-100/50"
-                  )}
+                  type="submit"
+                  disabled={!content.trim() || sendNoteMutation.isPending}
+                  className="px-6 py-2.5 rounded-xl bg-ember-500 hover:bg-ember-600 text-white shadow-sm text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Lock className="h-3.5 w-3.5" /> Secret (Anonymous)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAnonymous(false)}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all",
-                    !isAnonymous
-                      ? "bg-ink-900 text-white shadow-sm"
-                      : "text-ink-600 hover:text-ink-900 hover:bg-ink-100/50"
+                  {sendNoteMutation.isPending ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" /> Send Note
+                    </>
                   )}
-                >
-                  <Eye className="h-3.5 w-3.5" /> Identified
                 </button>
               </div>
-            </div>
-            <div>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value.slice(0, 800))}
-                placeholder={`Write something to ${cleanDisplayName}...`}
-                rows={4}
-                className="w-full resize-none rounded-2xl border border-ink-200 bg-paper-50 px-4 py-3 text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-ember-400 focus:border-transparent transition text-sm"
-              />
-              <div className="flex justify-end mt-1">
-                <span className="text-xs text-ink-400 font-mono">
-                  {content.length}/800
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-end">
-              <button
-                type="submit"
-                disabled={!content.trim() || sendNoteMutation.isPending}
-                className="px-6 py-2.5 rounded-xl bg-ember-500 hover:bg-ember-600 text-white shadow-sm text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                {sendNoteMutation.isPending ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" /> Send Note
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </motion.div>
+            </form>
+          </motion.div>
+        )}
 
         <div className="mt-16 sm:mt-20">
           <div className="flex items-center gap-3 mb-8 px-2">
@@ -502,14 +542,14 @@ export function PublicProfilePage() {
                 Published Messages
               </h2>
               <p className="text-sm text-ink-400 font-mono mt-0.5">
-                {publishedMessages.length}{" "}
-                {publishedMessages.length === 1 ? "entry" : "entries"} available
+                {messagesArray.length}{" "}
+                {messagesArray.length === 1 ? "entry" : "entries"} available
                 publicly
               </p>
             </div>
           </div>
 
-          {publishedMessages.length === 0 ? (
+          {messagesArray.length === 0 ? (
             <EmptyState
               icon={<EyeOff className="h-8 w-8" />}
               title="No Public Messages"
@@ -517,15 +557,56 @@ export function PublicProfilePage() {
               className="py-16 bg-white border border-ink-100 rounded-3xl shadow-sm"
             />
           ) : (
-            <div className="grid grid-cols-1  gap-6">
-              {publishedMessages.map((msg: any) => {
+            <div className="grid grid-cols-1 gap-6">
+              {messagesArray.map((msg: any) => {
                 const messageId = msg._id || msg.id;
+
+                const getNormalizedReactions = (m: any) => {
+                  if (
+                    Array.isArray(m.reactions?.types) &&
+                    m.reactions.types.length > 0
+                  ) {
+                    return m.reactions.types;
+                  }
+                  const summaryTypes = m.reactionSummary?.types;
+                  if (summaryTypes && typeof summaryTypes === "object") {
+                    return Object.entries(summaryTypes)
+                      .filter(
+                        ([key, count]) =>
+                          key !== "_id" &&
+                          typeof count === "number" &&
+                          count > 0
+                      )
+                      .map(([type, count]) => ({ type, count }));
+                  }
+                  if (Array.isArray(m.reactions)) return m.reactions;
+                  return [];
+                };
+
                 const activeReaction =
                   msg.reactions?.myReaction ||
                   msg.myReaction ||
                   msg.reactionSummary?.myReaction ||
                   null;
-                const totalComments = msg.repliesCount ?? msg.replyCount ?? 0;
+
+                const totalComments =
+                  msg.repliesCount ??
+                  msg.replyCount ??
+                  msg.commentsCount ??
+                  msg.replySummary?.total ??
+                  0;
+
+                const msgReceiverId =
+                  msg.receiver?._id || msg.receiver?.id || msg.receiver;
+                const msgSenderId =
+                  msg.sender?._id || msg.sender?.id || msg.sender;
+
+                const isMessageOwnerOrReceiver = Boolean(
+                  currentUserId &&
+                    (String(currentUserId) === String(msgReceiverId) ||
+                      String(currentUserId) === String(msgSenderId) ||
+                      isProfileOwner)
+                );
 
                 return (
                   <MessageCard
@@ -539,17 +620,19 @@ export function PublicProfilePage() {
                       reactions: {
                         ...(msg.reactions || {}),
                         myReaction: activeReaction,
-                        types: msg.reactions?.types || [],
+                        types: getNormalizedReactions(msg),
                       },
                     }}
                     onReact={(type) =>
                       handleReact(messageId, type, activeReaction)
                     }
-                    onTogglePublish={() => handlePublishToggleClick(messageId)}
+                    onTogglePublish={
+                      isMessageOwnerOrReceiver
+                        ? () => handlePublishToggleClick(messageId)
+                        : undefined
+                    }
                     showActions={true}
-                    currentUserId={
-                      currentUserProfile?._id || currentUserProfile?.id
-                    } // FIX: NOW THIS KNOWS WHO THE VISITOR IS
+                    currentUserId={currentUserId}
                   />
                 );
               })}
