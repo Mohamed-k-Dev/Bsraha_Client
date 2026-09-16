@@ -63,6 +63,7 @@ function App() {
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/u/:displayName" element={<PublicProfilePage />} />
+                <Route path="/profile" element={<ProfilePage />} />
               </Route>
             </Route>
 

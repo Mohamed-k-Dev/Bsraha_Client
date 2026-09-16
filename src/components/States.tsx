@@ -52,7 +52,7 @@ export function ErrorState({ message, onRetry, className }: ErrorStateProps) {
       <h3 className="font-display text-xl font-semibold text-ink-800">Something went wrong</h3>
       <p className="mt-2 max-w-sm text-ink-500">{message}</p>
       {onRetry && (
-        <button onClick={onRetry} className="btn btn-outline mt-5">
+        <button onClick={onRetry} className="btn btn-outline mt-5 px-5 py-3">
           Try again
         </button>
       )}

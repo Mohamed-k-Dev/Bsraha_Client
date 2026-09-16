@@ -171,6 +171,7 @@ export function ReplyCard({
               seed={avatarSeed}
               size="sm"
               anonymous={reply.isAnonymous}
+              src={reply.sender?.image?.url}
             />
             <div className="flex items-center gap-2 min-w-0">
               {reply.isAnonymous ? (

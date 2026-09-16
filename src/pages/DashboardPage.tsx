@@ -302,7 +302,7 @@ export function DashboardPage() {
             color="moss"
           />
           <StatCard
-            to="/messages?tab=sent"
+            to="/sent-messages"
             icon={<Send className="h-5 w-5" />}
             label="Sent"
             value={stats?.sentMessages || 0}
@@ -399,7 +399,7 @@ export function DashboardPage() {
           title="No messages yet"
           description="When someone sends you a message, it will show up here."
           action={
-            <Link to="/search" className="btn btn-ember">
+            <Link to="/search" className="btn btn-ember px-5 py-3">
               Find people to message
             </Link>
           }

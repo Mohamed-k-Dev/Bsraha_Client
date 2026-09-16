@@ -9,7 +9,6 @@ import {
   LogOut,
   Mail,
   Phone,
-  Calendar,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -22,8 +21,8 @@ import {
   updatePassword,
   uploadProfileImageApi,
   uploadCoverImagesApi,
+  getUserProfile,
 } from "@/api/user.api";
-import { getUserProfile } from "@/api/user.api";
 
 export function SettingsPage() {
   const { logout, updateUser } = useAuth();
@@ -52,7 +51,15 @@ export function SettingsPage() {
         if (profile) {
           setUserProfileData(profile);
           setUserName(profile.userName ?? "");
-          setDisplayName(profile.displayName ?? "");
+
+          // Strip any existing @Bsraha or @ so the user only sees/edits their base name
+          const rawDisplayName = profile.displayName ?? "";
+          const cleanDisplayName = rawDisplayName
+            .replace(/@Bsraha/gi, "")
+            .replace(/@/g, "")
+            .trim();
+          setDisplayName(cleanDisplayName);
+
           setEmail(profile.email ?? "");
           setGender(profile.gender ?? "");
           setAge(profile.age ?? "");
@@ -88,13 +95,29 @@ export function SettingsPage() {
   const profileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // Handle display name input change and prevent `@` typing
+  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitizedValue = e.target.value.replace(/@/g, "");
+    setDisplayName(sanitizedValue);
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanName = displayName.replace(/@/g, "").trim();
+
+    if (!cleanName) {
+      toast.error("Display name cannot be empty.");
+      return;
+    }
+
+    // AUTOMATICALLY APPEND @Bsraha BEFORE SAVING
+    const finalDisplayName = `${cleanName}@Bsraha`;
+
     setSavingProfile(true);
     try {
       const res = await updateProfileInfo({
         userName,
-        displayName,
+        displayName: finalDisplayName,
         gender,
         age,
         phone,
@@ -184,7 +207,6 @@ export function SettingsPage() {
     { id: "password", label: "Security & Password", icon: Lock },
   ];
 
-  // Get the last cover image if available
   const coverImagesList = userProfileData?.coverImages || [];
   const lastCoverImage =
     coverImagesList.length > 0
@@ -256,7 +278,7 @@ export function SettingsPage() {
             )}
             <div>
               <div className="font-display text-lg font-semibold text-ink-800">
-                {displayName || userName}
+                {displayName ? `${displayName}@Bsraha` : userName}
               </div>
               <div className="text-sm text-ink-400 font-mono">@{userName}</div>
             </div>
@@ -279,13 +301,25 @@ export function SettingsPage() {
               <label className="block text-sm font-medium text-ink-700 mb-1.5">
                 Display Name
               </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="input"
-                required
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={handleDisplayNameChange}
+                  placeholder="e.g. mohamed"
+                  className="input pr-20"
+                  required
+                />
+                <span className="absolute right-3 text-xs font-bold text-ink-400 font-mono pointer-events-none select-none">
+                  @Bsraha
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-ink-400 font-mono">
+                Will be saved as:{" "}
+                <strong className="text-ink-700">
+                  {displayName ? `${displayName}@Bsraha` : "@Bsraha"}
+                </strong>
+              </p>
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-ink-700 mb-1.5">
@@ -341,7 +375,6 @@ export function SettingsPage() {
           </div>
 
           <div className="space-y-3 pt-4">
-            {/* Full-width Save Button */}
             <button
               type="submit"
               disabled={savingProfile}
@@ -350,7 +383,6 @@ export function SettingsPage() {
               {savingProfile ? <Spinner size="sm" /> : <>Save Changes</>}
             </button>
 
-            {/* Logout Button right under save button */}
             <button
               type="button"
               onClick={handleLogout}
@@ -362,7 +394,7 @@ export function SettingsPage() {
         </motion.form>
       )}
 
-      {/* Photos & Covers Section (Centered with Edit Icons) */}
+      {/* Photos & Covers Section */}
       {active === "photos" && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -385,7 +417,6 @@ export function SettingsPage() {
             className="hidden"
           />
 
-          {/* Profile Image Centered */}
           <div className="card p-8 flex flex-col items-center text-center">
             <h3 className="font-display font-semibold text-lg text-ink-900 mb-2">
               Profile Image
@@ -421,7 +452,6 @@ export function SettingsPage() {
             </button>
           </div>
 
-          {/* Cover Images Centered (Showing last image preview if exists) */}
           <div className="card p-8 flex flex-col items-center text-center">
             <h3 className="font-display font-semibold text-lg text-ink-900 mb-2">
               Cover Images

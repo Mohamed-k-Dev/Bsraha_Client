@@ -127,20 +127,25 @@ export function AppLayout() {
               </nav>
 
               <div className="p-4 border-t border-ink-100 bg-paper-100">
-                <div className="flex items-center gap-3 rounded-xl p-3">
+                <Link
+                  to="/profile"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-3 rounded-xl p-3 hover:bg-ink-100 transition-colors"
+                >
                   <Avatar
                     name={user?.displayName || "User"}
                     seed={user?.userName || "anon"}
                     size="md"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-ink-800 truncate">
-                        {user?.displayName || "Loading..."}
-                      </div>
+                    <div className="text-sm font-bold text-ink-800 truncate">
+                      {user?.displayName || "Loading..."}
+                    </div>
+                    <div className="text-sm text-ink-400 truncate">
+                      @{user?.userName || "user"}
                     </div>
                   </div>
-                </div>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[15px] font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
@@ -181,7 +186,7 @@ export function AppLayout() {
         </nav>
         <div className="p-4 border-t border-ink-100">
           <Link
-            to={`/profile/${encodeURIComponent(user?.displayName || "")}`}
+            to="/profile"
             className="flex items-center gap-3 rounded-xl p-3 hover:bg-ink-100 transition-colors"
           >
             <Avatar
@@ -189,7 +194,7 @@ export function AppLayout() {
               seed={user?.userName || "anon"}
               size="md"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-bold text-ink-800 truncate">
                 {user?.displayName || "Loading..."}
               </div>
