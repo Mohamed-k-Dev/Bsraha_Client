@@ -23,7 +23,44 @@ export const searchUsers = async ({
   });
   return res.data?.data || { users: [], pagination: {} };
 };
-const getPublicUserProfile = async (displayName: string) => {
-  const res = await api.get(`/user/profile/${encodeURIComponent(displayName)}`);
-  return res.data?.data;
+
+export const updateProfileInfo = async (data: {
+  userName?: string;
+  gender?: string;
+  age?: number | string;
+  address?: string;
+  phone?: string;
+  birthDate?: string;
+}) => {
+  const res = await api.patch("/user/update/profile", data);
+  return res.data;
+};
+
+export const updatePassword = async (data: {
+  oldPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}) => {
+  const res = await api.patch("/user/update/password", data);
+  return res.data;
+};
+
+export const uploadProfileImageApi = async (file: File) => {
+  const formData = new FormData();
+  formData.append("profileImage", file);
+  const res = await api.patch("/user/upload/profile-image", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+};
+
+export const uploadCoverImagesApi = async (files: File[]) => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append("coverImages", file);
+  });
+  const res = await api.patch("/user/upload/coverImages", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
 };

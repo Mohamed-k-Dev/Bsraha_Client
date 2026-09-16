@@ -65,3 +65,20 @@ export const resetPasswordApi = async (data: ResetPasswordData) => {
   const response = await api.patch("/auth/reset-password", data);
   return response.data;
 };
+
+export const logoutApi = async () => {
+  const accesstoken = localStorage.getItem("accessToken") || "";
+  const refreshtoken = localStorage.getItem("refreshToken") || "";
+
+  const res = await api.post(
+    "/auth/logout",
+    {},
+    {
+      headers: {
+        accesstoken,
+        refreshtoken,
+      },
+    }
+  );
+  return res.data;
+};

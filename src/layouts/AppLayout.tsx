@@ -7,21 +7,32 @@ import {
   useLocation,
 } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Home, Mail, Search, Bell, Settings, LogOut, X } from "lucide-react";
+import {
+  Home,
+  Mail,
+  Send,
+  Search,
+  Bell,
+  Settings,
+  LogOut,
+  X,
+} from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "react-toastify";
 
 import { Logo } from "@/components/Logo";
 import { Avatar } from "@/components/Avatar";
 import { RootState } from "@/store/store";
 import { logout as logoutAction } from "@/store/slices/authSlice";
-import { api } from "@/api/axios";
+import { logoutApi } from "@/api/auth.api";
 import { getUserProfile } from "@/api/user.api";
 import { cn } from "@/utils";
 
 const navItems = [
   { to: "/dashboard", label: "Home", icon: Home },
-  { to: "/messages", label: "Messages", icon: Mail },
+  { to: "/messages", label: "Inbox", icon: Mail },
+  { to: "/sent-messages", label: "Sent Messages", icon: Send },
   { to: "/search", label: "Search", icon: Search },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -39,7 +50,6 @@ export function AppLayout() {
   const { accessToken } = useSelector((state: RootState) => state.auth);
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const { data: user } = useQuery({
     queryKey: ["user-profile"],
@@ -47,10 +57,16 @@ export function AppLayout() {
     enabled: !!accessToken,
   });
 
-
-  const handleLogout = useCallback(() => {
-    dispatch(logoutAction());
-    navigate("/login");
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutApi();
+    } catch (error) {
+      console.error("Logout API error:", error);
+    } finally {
+      dispatch(logoutAction());
+      toast.success("Logged out successfully");
+      navigate("/login");
+    }
   }, [dispatch, navigate]);
 
   if (!accessToken) return null;
@@ -94,6 +110,7 @@ export function AppLayout() {
                   <NavLink
                     key={item.to}
                     to={item.to}
+                    onClick={() => setMobileOpen(false)}
                     className={({ isActive }) =>
                       cn(
                         "flex items-center gap-4 rounded-xl px-4 py-3 text-[15px] font-medium transition-all",
@@ -164,7 +181,7 @@ export function AppLayout() {
         </nav>
         <div className="p-4 border-t border-ink-100">
           <Link
-            to="/profile"
+            to={`/profile/${encodeURIComponent(user?.displayName || "")}`}
             className="flex items-center gap-3 rounded-xl p-3 hover:bg-ink-100 transition-colors"
           >
             <Avatar
@@ -194,7 +211,6 @@ export function AppLayout() {
       {/* MAIN CONTENT AREA */}
       {/* ========================================= */}
       <main className="flex-1 flex flex-col min-h-screen md:ml-64 lg:ml-80">
-        {/* We pass setMobileOpen down to the children (like DashboardPage) */}
         <Outlet context={{ setMobileOpen } satisfies LayoutContextType} />
       </main>
     </div>
