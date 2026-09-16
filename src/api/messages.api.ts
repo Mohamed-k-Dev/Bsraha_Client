@@ -184,3 +184,18 @@ export const updateMessageRepliesVisibility = async ({
   });
   return res.data;
 };
+
+export const getSentMessages = async ({
+  filter = "all",
+  page = 1,
+  limit = 10,
+}: {
+  filter?: string;
+  page?: number;
+  limit?: number;
+} = {}) => {
+  const res = await api.get(`/message/sent`, {
+    params: { filter, page, limit },
+  });
+  return res.data?.data;
+};

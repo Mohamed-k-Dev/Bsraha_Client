@@ -20,6 +20,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { ToastContainer } from "react-toastify";
+import { SentMessagesPage } from "./pages/SentMessagesPage";
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
                   path="/messages/:messageId/replies/:replyId"
                   element={<ReplyThreadPage />}
                 />
+                <Route path="/sent-messages" element={<SentMessagesPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
